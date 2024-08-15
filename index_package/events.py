@@ -1,9 +1,27 @@
+from enum import Enum
 import sqlite3
 
+from dataclasses import dataclass
 from typing import Optional
-from index_package.scanner import Event, EventKind
 
-class Watcher:
+class EventTarget(Enum):
+  File = 0
+  Directory = 1
+
+class EventKind(Enum):
+    Added = 0
+    Updated = 1
+    Removed = 2
+
+@dataclass
+class Event:
+  id: int
+  kind: EventKind
+  target: EventTarget
+  path: str
+  mtime: float
+
+class EventSearcher:
   def __init__(self, conn: sqlite3.Connection, cursor: sqlite3.Cursor) -> None:
     self._conn: sqlite3.Connection = conn
     self._cursor: sqlite3.Cursor = cursor
@@ -47,7 +65,7 @@ class Watcher:
   def _fetch_events_group(self) -> Optional[list[Event]]:
     group_size = 45
     row = self._cursor.execute(
-      "SELECT id, kind, path, mtime FROM events ORDER BY id LIMIT ?", (group_size,),
+      "SELECT id, kind, target, path, mtime FROM events ORDER BY id LIMIT ?", (group_size,),
     )
     rows = row.fetchall()
     if len(rows) == 0:
@@ -58,8 +76,9 @@ class Watcher:
       events.append(Event(
         id=row[0],
         kind=EventKind(row[1]),
-        path=row[2],
-        mtime=row[3],
+        target=EventTarget(row[2]),
+        path=row[3],
+        mtime=row[4],
       ))
     events.reverse()
     return events
