@@ -38,6 +38,7 @@ class EventSearcher:
       self._events = None
 
     self._cursor.close()
+    self._conn.commit()
     self._conn.close()
     return False
 
@@ -59,6 +60,7 @@ class EventSearcher:
     if len(self._events) == 0:
       self._events = None
       self._cursor.execute("DELETE FROM events WHERE id <= ?", (event.id,))
+      self._conn.commit()
 
     return event
 
