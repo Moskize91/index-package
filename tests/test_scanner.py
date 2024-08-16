@@ -4,7 +4,7 @@ import shutil
 import unittest
 
 from index_package import scan
-from index_package.events import EventKind, EventTarget
+from index_package.events import EventKind, EventSearcher, EventTarget
 
 class TestSession(unittest.TestCase):
 
@@ -14,6 +14,8 @@ class TestSession(unittest.TestCase):
     self._test_insert_files(scan_path, db_path)
     time.sleep(0.1)
     self._test_modify_part_of_files(scan_path, db_path)
+    time.sleep(0.1)
+    self._test_delete_recursively(scan_path, db_path)
 
   def _test_insert_files(self, scan_path: str, db_path: str):
     self.set_file(scan_path, "./foobar", "hello world")
@@ -43,21 +45,7 @@ class TestSession(unittest.TestCase):
     self.del_file(scan_path, "./universe/sun/sun2")
 
     with scan(scan_path, db_path) as events:
-      added_path_list: list[tuple[str, EventTarget]] = []
-      removed_path_list: list[tuple[str, EventTarget]] = []
-      updated_path_list: list[tuple[str, EventTarget]] = []
-
-      for event in events:
-        if event.kind == EventKind.Added:
-          added_path_list.append((event.path, event.target))
-        elif event.kind == EventKind.Removed:
-          removed_path_list.append((event.path, event.target))
-        elif event.kind == EventKind.Updated:
-          updated_path_list.append((event.path, event.target))
-
-      for path_list in [added_path_list, removed_path_list, updated_path_list]:
-        path_list.sort(key=lambda x: x[0])
-
+      added_path_list, removed_path_list, updated_path_list = self._classify_events(events)
       self.assertListEqual(added_path_list, [
         ("/universe/moon/moon2", EventTarget.File),
         ("/universe/moon/moon3", EventTarget.File),
@@ -71,6 +59,25 @@ class TestSession(unittest.TestCase):
         ("/universe/sun/sun2", EventTarget.File),
       ])
 
+  def _test_delete_recursively(self, scan_path: str, db_path: str):
+    self.del_file(scan_path, "./universe")
+
+    with scan(scan_path, db_path) as events:
+      added_path_list, removed_path_list, updated_path_list = self._classify_events(events)
+      self.assertListEqual(added_path_list, [])
+      self.assertListEqual(updated_path_list, [
+        ("/", EventTarget.Directory), # removed files in it
+      ])
+      self.assertListEqual(removed_path_list, [
+        ("/universe", EventTarget.Directory),
+        ("/universe/moon", EventTarget.Directory),
+        ("/universe/moon/moon1", EventTarget.File),
+        ("/universe/moon/moon2", EventTarget.File),
+        ("/universe/moon/moon3", EventTarget.File),
+        ("/universe/sun", EventTarget.Directory),
+        ("/universe/sun/sun1", EventTarget.File),
+      ])
+
   def setup_paths(self) -> tuple[str, str]:
     temp_path = os.path.abspath(os.path.join(__file__, "../test_temp"))
 
@@ -81,6 +88,28 @@ class TestSession(unittest.TestCase):
     db_path = os.path.join(temp_path, "index.db")
 
     return scan_path, db_path
+
+  def _classify_events(self, events: EventSearcher) -> tuple[
+    list[tuple[str, EventTarget]],
+    list[tuple[str, EventTarget]],
+    list[tuple[str, EventTarget]],
+  ]:
+    added_path_list: list[tuple[str, EventTarget]] = []
+    removed_path_list: list[tuple[str, EventTarget]] = []
+    updated_path_list: list[tuple[str, EventTarget]] = []
+
+    for event in events:
+      if event.kind == EventKind.Added:
+        added_path_list.append((event.path, event.target))
+      elif event.kind == EventKind.Removed:
+        removed_path_list.append((event.path, event.target))
+      elif event.kind == EventKind.Updated:
+        updated_path_list.append((event.path, event.target))
+
+    for path_list in [added_path_list, removed_path_list, updated_path_list]:
+      path_list.sort(key=lambda x: x[0])
+
+    return added_path_list, removed_path_list, updated_path_list
 
   def set_file(self, base_path: str, path: str, content: str):
     abs_file_path = os.path.join(base_path, path)

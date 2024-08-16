@@ -134,9 +134,8 @@ def _commit_file_self_events(
       "INSERT INTO events (kind, target, path, mtime) VALUES (?, ?, ?, ?)",
       (EventKind.Removed.value, old_target.value, old_path, old_mtime),
     )
-
-  if old_file is not None and old_file.children is not None:
-    _handle_removed_folder(old_file)
+    if old_file.children is not None:
+      _handle_removed_folder(cursor, old_file)
 
 def _commit_children_events(
   cursor: sqlite3.Cursor,
@@ -166,12 +165,32 @@ def _commit_children_events(
 
     if child_file.children is not None:
       target = EventTarget.Directory
-      _handle_removed_folder(child_file)
+      _handle_removed_folder(cursor, child_file)
 
     cursor.execute("DELETE FROM files WHERE path = ?", (child_path,))
     cursor.execute(
       "INSERT INTO events (kind, target, path, mtime) VALUES (?, ?, ?, ?)",
       (EventKind.Removed.value, target.value, child_path, child_file.mtime),
+    )
+
+def _handle_removed_folder(cursor: sqlite3.Cursor, folder: _File):
+  assert folder.children is not None
+
+  for child in folder.children:
+    path = os.path.join(folder.path, child)
+    file = _select_file(cursor, path)
+    if file is None:
+      continue
+
+    target: EventTarget = EventTarget.File
+    if file.children is not None:
+      target = EventTarget.Directory
+      _handle_removed_folder(cursor, file)
+
+    cursor.execute("DELETE FROM files WHERE path = ?", (file.path,))
+    cursor.execute(
+      "INSERT INTO events (kind, target, path, mtime) VALUES (?, ?, ?, ?)",
+      (EventKind.Removed.value, target.value, file.path, file.mtime),
     )
 
 def _select_file(cursor: sqlite3.Cursor, relative_path: str) -> Optional[_File]:
@@ -188,9 +207,6 @@ def _select_file(cursor: sqlite3.Cursor, relative_path: str) -> Optional[_File]:
 
   return _File(relative_path, mtime, children)
 
-def _handle_removed_folder(folder: _File):
-  # TODO:
-  pass
 
 def file_inserted_children_and_target(file: _File) -> tuple[Optional[str], EventTarget]:
   children: Optional[str] = None
