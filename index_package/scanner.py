@@ -79,12 +79,11 @@ def _scan_and_report(
 
   if not mtime_never_change:
     try:
-      conn.execute("BEGIN TRANSACTION")
+      cursor.execute("BEGIN TRANSACTION")
       _commit_file_self_events(cursor, old_file, new_file)
       _commit_children_events(cursor, old_file, new_file)
       conn.commit()
     except Exception as e:
-      print(e)
       conn.rollback()
       raise e
 

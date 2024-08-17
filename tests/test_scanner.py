@@ -80,12 +80,8 @@ class TestSession(unittest.TestCase):
 
   def setup_paths(self) -> tuple[str, str]:
     temp_path = os.path.abspath(os.path.join(__file__, "../test_temp"))
-
-    if os.path.exists(temp_path):
-      shutil.rmtree(temp_path)
-
     scan_path = os.path.join(temp_path, "data")
-    db_path = os.path.join(temp_path, "index.db")
+    db_path = os.path.join(temp_path, "scanner.db")
 
     return scan_path, db_path
 
