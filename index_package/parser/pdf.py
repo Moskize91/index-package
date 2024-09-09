@@ -5,6 +5,14 @@ import pikepdf
 
 from ..utils import hash_sha512, TempFolderHub
 
+class PdfPage:
+  def __init__(self, parent, hash: str):
+    self.hash: str= hash
+    self._parent = parent
+
+  def path(self) -> str:
+    return os.path.join(self._parent._pages_path, f"{self.hash}.pdf")
+
 # https://pikepdf.readthedocs.io/en/latest/
 class PdfParser:
   def __init__(self, cache_path: str, temp_path: str) -> None:
@@ -12,6 +20,16 @@ class PdfParser:
     self._temp_folders: TempFolderHub = TempFolderHub(temp_path)
     self._conn: sqlite3.Connection = self._connect(os.path.join(cache_path, "pages.db"))
     self._cursor: sqlite3.Cursor = self._conn.cursor()
+
+    if not os.path.exists(self._pages_path):
+      os.makedirs(self._pages_path, exist_ok=True)
+
+  def pages(self, hash: str) -> list[PdfPage]:
+    pdf_pages: list[PdfPage] = []
+    for page_hash in self._select_page_hashes(hash):
+      pdf_page = PdfPage(self, page_hash)
+      pdf_pages.append(pdf_page)
+    return pdf_pages
 
   def add_file(self, hash: str, file_path: str):
     origin_page_hashes = self._select_page_hashes(hash)
@@ -69,7 +87,9 @@ class PdfParser:
         page_hashes.append(page_hash)
         target_page_path = os.path.join(self._pages_path, f"{page_hash}.pdf")
 
-        if not os.path.exists(target_page_path) or os.path.isdir(target_page_path):
+        if not os.path.exists(target_page_path):
+          shutil.move(page_file_path, target_page_path)
+        elif os.path.isdir(target_page_path):
           shutil.rmtree(target_page_path)
           shutil.move(page_file_path, target_page_path)
 
@@ -86,10 +106,10 @@ class PdfParser:
     to_add_hashes = set(new_page_hashes)
 
     for hash in new_page_hashes:
-      to_remove_hashes.remove(hash)
+      to_remove_hashes.discard(hash)
 
     for hash in origin_page_hashes:
-      to_add_hashes.remove(hash)
+      to_add_hashes.discard(hash)
 
     try:
       self._cursor.execute("BEGIN TRANSACTION")
@@ -97,7 +117,7 @@ class PdfParser:
 
       for i, page_hash in enumerate(new_page_hashes):
         self._cursor.execute(
-          "INSERT INTO pages VALUES (?, ?, ?)",
+          "INSERT INTO pages (pdf_hash, page_index, page_hash) VALUES (?, ?, ?)",
           (pdf_hash, i, page_hash),
         )
       removed_hashes: list[str] = []
@@ -137,13 +157,17 @@ class PdfParser:
       cursor = conn.cursor()
       cursor.execute("""
         CREATE TABLE pages (
-          pdf_hash TEXT PRIMARY KEY,
-          page_index TEXT PRIMARY KEY,
+          id INTEGER PRIMARY KEY,
+          pdf_hash TEXT,
+          page_index TEXT,
           page_hash TEXT
         )
       """)
       cursor.execute("""
-        CREATE INDEX idx_pages ON pages (page_hash)
+        CREATE UNIQUE INDEX idx_pdf_pages ON pages (pdf_hash, page_index)
+      """)
+      cursor.execute("""
+        CREATE INDEX idx_page_pages ON pages (page_hash)
       """)
       conn.commit()
       cursor.close()

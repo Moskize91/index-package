@@ -12,12 +12,11 @@ class TempFolder:
     return os.path.join(self._base_path, self._folder_name)
 
   def __enter__(self):
-    folder_path: str = ""
     while True:
       self._folder_name = uuid.uuid4().hex
       if not os.path.exists(self.path):
         break
-    os.makedirs(folder_path)
+    os.makedirs(self.path)
     return self
 
   def __exit__(self, exc_type, exc_value, traceback):
