@@ -3,11 +3,12 @@ import unittest
 
 from typing import Optional
 from index_package.chunk import Chunk, ChunkHub
+from tests.utils import get_temp_path
 
-class TestSession(unittest.TestCase):
+class TestChunk(unittest.TestCase):
 
   def test_chunk_operation(self):
-    temp_path = os.path.abspath(os.path.join(__file__, "../test_temp"))
+    temp_path = get_temp_path("chunk")
     db_path = os.path.join(temp_path, "chunk2.db")
     chunks = ChunkHub(db_path)
 

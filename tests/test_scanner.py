@@ -5,8 +5,9 @@ import unittest
 
 from index_package import scan
 from index_package.events import EventKind, EventSearcher, EventTarget
+from tests.utils import get_temp_path
 
-class TestSession(unittest.TestCase):
+class TestScanner(unittest.TestCase):
 
   def test_scanning_folder(self):
     scan_path, db_path = self.setup_paths()
@@ -79,7 +80,7 @@ class TestSession(unittest.TestCase):
       ])
 
   def setup_paths(self) -> tuple[str, str]:
-    temp_path = os.path.abspath(os.path.join(__file__, "../test_temp"))
+    temp_path = get_temp_path("scanner")
     scan_path = os.path.join(temp_path, "data")
     db_path = os.path.join(temp_path, "scanner.db")
 
