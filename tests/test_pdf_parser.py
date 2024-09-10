@@ -1,6 +1,4 @@
 import os
-import time
-import shutil
 import unittest
 
 from index_package.parser import PdfParser
@@ -22,11 +20,11 @@ class TestPdfParser(unittest.TestCase):
     file1_pages = [p.hash for p in parser.pages(file1_hash)]
 
     self.assertListEqual(file1_pages, [
-      "bwUz-YCAgCmerMrITdL8h5wFm9NCqlDqKL_JK238MaS4zTGZ9InIUdKL5M1cwmHpkK_QnupzyfTIfD0UyqdNQA==",
-      "Lo9DdycASHhdtCPPAQEltpVeYfxMb0fkBJFjzkpir2HEIJjC2d3QqT_E6G2UQWCYQ4rowI8C-zQOPC9XYksO7g==",
-      "qRhojtmvrStVkLjopDGg3i1yI4Q7m8vTJ7KovbPt90A5O2akPvx-b_sURtGI1zhQr9il7v0PMqiowgknqMnqYQ==",
-      "A0rjq4lbhMmTBxS79v1WbRDCYcLObwQkVoQG7Qa3GHUjsR6AqpyHpCs0RUPiqVoUs5h80mPomsevV_3vX6PHPQ==",
-      "Ca1YFdCRX0MnpBIz1NCnVtGi5-YSTMmAGVN47msSBnmpmv0AtLI-VEbbsWQflsIp65PIq7Zt8bWz23jxKgB8dg==",
+      "Q9FWXE78o4aKMSv3t3LRJhJrJworxd3EJls6Dx1mOifWbIGmoS0CRf5Nx3t-ue_IqovVrrZy7ZUSkztABjqCCA==",
+      "a7SZ-nxEp3tHjBgPq6ZOUKcCKuNlKwzt3GsMK4FGmCcYR8Q_CgshFKk3lAZY4sspgl-vd6T9sAGu6a2wXxtqBA==",
+      "l02eglkFC4Yg2S7Gt44MuGne1PxnBgZ3lBgLvZ24GI0fwF-B70Sf4DjCxe_uU4KsZpyzKNasFLuxe_MUiSZXWQ==",
+      "JAm_KnYWAmoZf1d4srzQSZnRn7UzUOYJy-phO8n33HVBL-37N1hAN0vXnQ7QlmFikuichCdYD4tM698KK8mbJQ==",
+      "0INJs_zOQY96Qrn0JcKaGOiO5CF_SrclB54WKa4HJF171EPvubUAkcr2B8UJuKcTUfulA1gdDlnq4MCkf9fV_A==",
     ])
 
   def _assets_info(self, assets_path: str, name: str):

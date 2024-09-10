@@ -78,7 +78,11 @@ class PdfParser:
           page_file = pikepdf.Pdf.new()
           page_file.pages.append(page)
           page_file_path = os.path.join(folder_path, f"{i}.pdf")
-          page_file.save(page_file_path)
+          page_file.save(
+            page_file_path,
+            # make sure hash of file never changes
+            deterministic_id=True,
+          )
         pages_count = len(pdf_file.pages)
 
       for i in range(pages_count):
