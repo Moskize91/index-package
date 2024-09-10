@@ -47,11 +47,14 @@ class PdfParser:
     try:
       self._cursor.execute("BEGIN TRANSACTION")
       self._cursor.execute("DELETE FROM pages WHERE pdf_hash = ?", (hash,))
+      self._conn.commit()
     except Exception as e:
       self._conn.rollback()
       raise e
     for page_hash in page_hashes:
-      self._remove_page(page_hash)
+      self._cursor.execute("SELECT * FROM pages WHERE page_hash = ?", (page_hash,))
+      if self._cursor.fetchone() is None:
+        self._remove_page(page_hash)
 
   def _select_page_hashes(self, hash: str) -> list[str]:
     self._cursor.execute(
