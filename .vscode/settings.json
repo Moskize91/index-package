@@ -4,7 +4,10 @@
     "editor.insertSpaces": true
   },
   "cSpell.words": [
+    "annot",
+    "annots",
     "chromadb",
+    "pdfplumber",
     "pikepdf",
     "uids"
   ]

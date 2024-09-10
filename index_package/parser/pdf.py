@@ -3,6 +3,7 @@ import shutil
 import sqlite3
 import pikepdf
 
+from .pdf_extractor import PdfExtractor
 from ..utils import hash_sha512, TempFolderHub
 
 class PdfPage:
@@ -20,6 +21,7 @@ class PdfParser:
     self._temp_folders: TempFolderHub = TempFolderHub(temp_path)
     self._conn: sqlite3.Connection = self._connect(os.path.join(cache_path, "pages.db"))
     self._cursor: sqlite3.Cursor = self._conn.cursor()
+    self._extractor: PdfExtractor = PdfExtractor(self._pages_path)
 
     if not os.path.exists(self._pages_path):
       os.makedirs(self._pages_path, exist_ok=True)
@@ -37,10 +39,10 @@ class PdfParser:
     added_page_hashes, removed_page_hashes = self._update_db(origin_page_hashes, new_page_hashes, hash)
 
     for page_hash in added_page_hashes:
-      self._extract_page(page_hash)
+      self._extractor.extract_page(page_hash)
 
     for page_hash in removed_page_hashes:
-      self._remove_page(page_hash)
+      self._extractor.remove_page(page_hash)
 
   def remove_file(self, hash: str):
     page_hashes = self._select_page_hashes(hash)
@@ -54,7 +56,7 @@ class PdfParser:
     for page_hash in page_hashes:
       self._cursor.execute("SELECT * FROM pages WHERE page_hash = ?", (page_hash,))
       if self._cursor.fetchone() is None:
-        self._remove_page(page_hash)
+        self._extractor.remove_page(page_hash)
 
   def _select_page_hashes(self, hash: str) -> list[str]:
     self._cursor.execute(
@@ -147,13 +149,6 @@ class PdfParser:
     except Exception as e:
       self._conn.rollback()
       raise e
-
-  def _extract_page(self, page_hash: str):
-    pass # TODO:
-
-  def _remove_page(self, page_hash: str):
-    page_path = os.path.join(self._pages_path, f"{page_hash}.pdf")
-    os.remove(page_path)
 
   def _connect(self, db_path: str) -> sqlite3.Connection:
     is_first_time = not os.path.exists(db_path)

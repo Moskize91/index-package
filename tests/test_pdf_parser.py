@@ -10,8 +10,8 @@ class TestPdfParser(unittest.TestCase):
   def test_struct_and_destruct_pdf(self):
     assets_path = os.path.abspath(os.path.join(__file__, "../assets"))
     parser = PdfParser(
-      cache_path=get_temp_path("pdf/cache"),
-      temp_path=get_temp_path("pdf/temp"),
+      cache_path=get_temp_path("pdf_struct/cache"),
+      temp_path=get_temp_path("pdf_struct/temp"),
     )
     file1, file1_hash = self._assets_info(assets_path, "The Sublime Object of Ideology.pdf")
     file2, file2_hash = self._assets_info(assets_path, "铁证待判.pdf")
@@ -61,6 +61,15 @@ class TestPdfParser(unittest.TestCase):
       self._read_hash_of_files(parser._pages_path),
     )
 
+  def test_extract_annotation(self):
+    assets_path = os.path.abspath(os.path.join(__file__, "../assets"))
+    parser = PdfParser(
+      cache_path=get_temp_path("pdf_extract/cache"),
+      temp_path=get_temp_path("pdf_extract/temp"),
+    )
+    file, file_hash = self._assets_info(assets_path, "纯粹理性批判.pdf")
+    parser.add_file(file_hash, file)
+
   def _assets_info(self, assets_path: str, name: str):
     path = os.path.join(assets_path, name)
     hash = hash_sha512(path)
@@ -70,8 +79,9 @@ class TestPdfParser(unittest.TestCase):
     hash_of_files: list[str] = []
 
     for file_name in os.listdir(dir_path):
-      hash, _ = os.path.splitext(file_name)
-      hash_of_files.append(hash)
+      hash, ext_name = os.path.splitext(file_name)
+      if ext_name == ".pdf":
+        hash_of_files.append(hash)
 
     hash_of_files.sort()
     return hash_of_files
