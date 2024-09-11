@@ -25,6 +25,7 @@ class TestPdfParser(unittest.TestCase):
       id=0,
       kind=EventKind.Added,
       target=EventTarget.File,
+      scope="test",
       path="/The Analysis of the Transference.pdf",
       mtime=0,
     )

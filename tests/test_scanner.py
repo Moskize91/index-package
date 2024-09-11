@@ -28,7 +28,7 @@ class TestScanner(unittest.TestCase):
     self.set_file(scan_path, "./universe/sun/sun2", "this is sun1")
     self.set_file(scan_path, "./universe/moon/moon1", "this is moon1")
 
-    with scanner.scan("test") as events:
+    with scanner.scan() as events:
       path_list: list[str] = []
       for event in events:
         path_list.append(event.path)
@@ -47,7 +47,7 @@ class TestScanner(unittest.TestCase):
     self.set_file(scan_path, "./universe/moon/moon3", "this is moon3")
     self.del_file(scan_path, "./universe/sun/sun2")
 
-    with scanner.scan("test") as events:
+    with scanner.scan() as events:
       added_path_list, removed_path_list, updated_path_list = self._classify_events(events)
       self.assertListEqual(added_path_list, [
         ("/universe/moon/moon2", EventTarget.File),
@@ -65,7 +65,7 @@ class TestScanner(unittest.TestCase):
   def _test_delete_recursively(self, scan_path: str, scanner: Scanner):
     self.del_file(scan_path, "./universe")
 
-    with scanner.scan("test") as events:
+    with scanner.scan() as events:
       added_path_list, removed_path_list, updated_path_list = self._classify_events(events)
       self.assertListEqual(added_path_list, [])
       self.assertListEqual(updated_path_list, [

@@ -15,35 +15,60 @@ class Scanner:
   def __init__(self, db_path: str, sources: dict[str, str]) -> None:
     self._db_path: str = db_path
     self._sources: dict[str, str] = sources
+    self._did_sync_scopes = False
 
-  def scan(self, scope: str) -> EventSearcher:
+  def scan(self) -> EventSearcher:
+    conn = self._connect()
+    cursor = conn.cursor()
+
+    for scope, scan_path in self._sources.items():
+      self._scan_scope(conn, cursor, scope, scan_path)
+
+    return EventSearcher(conn, cursor)
+
+  def scan_scope(self, scope: str) -> EventSearcher:
     scan_path = self._sources.get(scope, None)
     if scan_path is None:
       raise ValueError(f"unregistered scope: {scope}")
 
     conn = self._connect()
     cursor = conn.cursor()
+    self._scan_scope(conn, cursor, scope, scan_path)
+
+    return EventSearcher(conn, cursor)
+
+  def _scan_scope(
+    self,
+    conn: sqlite3.Connection,
+    cursor: sqlite3.Cursor,
+    scope: str,
+    scan_path: str,
+  ):
     next_relative_paths: list[str] = ["/"]
+
+    if not self._did_sync_scopes:
+      self._sync_scopes(conn, cursor)
+      self._did_sync_scopes = True
+
     while len(next_relative_paths) > 0:
       relative_path = next_relative_paths.pop()
-      children = self._scan_and_report(conn, cursor, scan_path, relative_path)
+      children = self._scan_and_report(conn, cursor, scope, scan_path, relative_path)
       if children is not None:
         for child in children:
           next_relative_path = os.path.join(relative_path, child)
           next_relative_paths.insert(0, next_relative_path)
-    return EventSearcher(conn, cursor)
 
   def _connect(self) -> sqlite3.Connection:
     is_first_time = not os.path.exists(self._db_path)
     conn = sqlite3.connect(self._db_path)
-    os.path.getmtime(self._db_path)
 
     if is_first_time:
       cursor = conn.cursor()
       cursor.execute('''
         CREATE TABLE files (
-          path TEXT PRIMARY KEY,
+          id TEXT PRIMARY KEY,
           mtime REAL NOT NULL,
+          scope TEXT NOT NULL,
           children TEXT
         )
       ''')
@@ -53,7 +78,13 @@ class Scanner:
           kind INTEGER NOT NULL,
           target INTEGER NOT NULL,
           path TEXT NOT NULL,
+          scope TEXT NOT NULL,
           mtime REAL NOT NULL
+        )
+      ''')
+      cursor.execute('''
+        CREATE TABLE scopes (
+          name TEXT PRIMARY KEY
         )
       ''')
       conn.commit()
@@ -61,15 +92,45 @@ class Scanner:
 
     return conn
 
+  def _sync_scopes(
+    self,
+    conn: sqlite3.Connection,
+    cursor: sqlite3.Cursor,
+  ):
+    cursor.execute("SELECT name FROM scopes")
+    origin_scopes: set[str] = set()
+
+    for row in cursor.fetchall():
+      origin_scopes.add(row[0])
+
+    try:
+      cursor.execute("BEGIN TRANSACTION")
+      for scope in self._sources.keys():
+        if scope not in origin_scopes:
+          cursor.execute("INSERT INTO scopes (name) VALUES (?)", (scope,))
+          if scope in origin_scopes:
+            origin_scopes.remove(scope)
+
+      for to_remove_scope in origin_scopes:
+        cursor.execute("DELETE FROM files WHERE scope = ?", (to_remove_scope,))
+
+      conn.commit()
+
+    except Exception as e:
+      conn.rollback()
+      raise e
+
   def _scan_and_report(
-      self,
-      conn: sqlite3.Connection,
-      cursor: sqlite3.Cursor,
-      scan_path: str,
-      relative_path: str) -> Optional[list[str]]:
+    self,
+    conn: sqlite3.Connection,
+    cursor: sqlite3.Cursor,
+    scope: str,
+    scan_path: str,
+    relative_path: str
+  ) -> Optional[list[str]]:
 
     abs_path = os.path.join(scan_path, f".{relative_path}")
-    old_file = self._select_file(cursor, relative_path)
+    old_file = self._select_file(cursor, scope, relative_path)
     new_file: Optional[_File] = None
     mtime_never_change = False
 
@@ -82,6 +143,7 @@ class Scanner:
         mtime_never_change = True
       elif os.path.isdir(abs_path):
         children = os.listdir(abs_path)
+
       new_file = _File(relative_path, mtime, children)
 
     elif old_file is None:
@@ -90,8 +152,8 @@ class Scanner:
     if not mtime_never_change:
       try:
         cursor.execute("BEGIN TRANSACTION")
-        self._commit_file_self_events(cursor, old_file, new_file)
-        self._commit_children_events(cursor, old_file, new_file)
+        self._commit_file_self_events(cursor, scope, old_file, new_file)
+        self._commit_children_events(cursor, scope, old_file, new_file)
         conn.commit()
       except Exception as e:
         conn.rollback()
@@ -108,48 +170,53 @@ class Scanner:
   def _commit_file_self_events(
     self,
     cursor: sqlite3.Cursor,
+    scope: str,
     old_file: Optional[_File],
-    new_file: Optional[_File]):
-
+    new_file: Optional[_File]
+  ):
     if new_file is not None:
       new_path = new_file.path
       new_mtime = new_file.mtime
       new_children, new_target = self._file_inserted_children_and_target(new_file)
 
       if old_file is None:
+        file_id = self._file_id(scope, new_path)
         cursor.execute(
-          "INSERT INTO files (path, mtime, children) VALUES (?, ?, ?)",
-          (new_path, new_mtime, new_children),
+          "INSERT INTO files (id, mtime, scope, children) VALUES (?, ?, ?, ?)",
+          (file_id, new_mtime, scope, new_children),
         )
         cursor.execute(
-          "INSERT INTO events (kind, target, path, mtime) VALUES (?, ?, ?, ?)",
-          (EventKind.Added.value, new_target.value, new_path, new_mtime),
+          "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
+          (EventKind.Added.value, new_target.value, new_path, scope, new_mtime),
         )
       else:
+        file_id = self._file_id(scope, new_path)
         cursor.execute(
-          "UPDATE files SET mtime = ?, children = ? WHERE path = ?",
-          (new_mtime, new_children, new_path),
+          "UPDATE files SET mtime = ?, children = ? WHERE id = ?",
+          (new_mtime, new_children, file_id),
         )
         cursor.execute(
-          "INSERT INTO events (kind, target, path, mtime) VALUES (?, ?, ?, ?)",
-          (EventKind.Updated.value, new_target.value, new_path, new_mtime),
+          "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
+          (EventKind.Updated.value, new_target.value, new_path, scope, new_mtime),
         )
     elif old_file is not None:
       old_path = old_file.path
       old_mtime = old_file.mtime
       old_target = EventTarget.File if old_file.children is None else EventTarget.Directory
+      file_id = self._file_id(scope, old_path)
 
-      cursor.execute("DELETE FROM files WHERE path = ?", (old_path,))
+      cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
       cursor.execute(
-        "INSERT INTO events (kind, target, path, mtime) VALUES (?, ?, ?, ?)",
-        (EventKind.Removed.value, old_target.value, old_path, old_mtime),
+        "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
+        (EventKind.Removed.value, old_target.value, old_path, scope, old_mtime),
       )
       if old_file.children is not None:
-        self._handle_removed_folder(cursor, old_file)
+        self._handle_removed_folder(cursor, scope, old_file)
 
   def _commit_children_events(
     self,
     cursor: sqlite3.Cursor,
+    scope: str,
     old_file: Optional[_File],
     new_file: Optional[_File]):
 
@@ -167,45 +234,47 @@ class Scanner:
 
     for removed_file in to_remove:
       child_path = os.path.join(old_file.path, removed_file)
-      child_file = self._select_file(cursor, child_path)
+      child_file = self._select_file(cursor, scope, child_path)
 
       if child_file is None:
         continue
 
       target: EventTarget = EventTarget.File
+      file_id = self._file_id(scope, child_path)
 
       if child_file.children is not None:
         target = EventTarget.Directory
-        self._handle_removed_folder(cursor, child_file)
+        self._handle_removed_folder(cursor, scope, child_file)
 
-      cursor.execute("DELETE FROM files WHERE path = ?", (child_path,))
+      cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
       cursor.execute(
-        "INSERT INTO events (kind, target, path, mtime) VALUES (?, ?, ?, ?)",
-        (EventKind.Removed.value, target.value, child_path, child_file.mtime),
+        "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
+        (EventKind.Removed.value, target.value, child_path, scope, child_file.mtime),
       )
 
-  def _handle_removed_folder(self, cursor: sqlite3.Cursor, folder: _File):
+  def _handle_removed_folder(self, cursor: sqlite3.Cursor, scope: str, folder: _File):
     assert folder.children is not None
 
     for child in folder.children:
       path = os.path.join(folder.path, child)
-      file = self._select_file(cursor, path)
+      file = self._select_file(cursor, scope, path)
       if file is None:
         continue
 
       target: EventTarget = EventTarget.File
       if file.children is not None:
         target = EventTarget.Directory
-        self._handle_removed_folder(cursor, file)
+        self._handle_removed_folder(cursor, scope, file)
 
-      cursor.execute("DELETE FROM files WHERE path = ?", (file.path,))
+      cursor.execute("DELETE FROM files WHERE id = ?", (file.path,))
       cursor.execute(
-        "INSERT INTO events (kind, target, path, mtime) VALUES (?, ?, ?, ?)",
-        (EventKind.Removed.value, target.value, file.path, file.mtime),
+        "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
+        (EventKind.Removed.value, target.value, file.path, scope, file.mtime),
       )
 
-  def _select_file(self, cursor: sqlite3.Cursor, relative_path: str) -> Optional[_File]:
-    cursor.execute("SELECT mtime, children FROM files WHERE path = ?", (relative_path,))
+  def _select_file(self, cursor: sqlite3.Cursor, scope: str, relative_path: str) -> Optional[_File]:
+    file_id = self._file_id(scope, relative_path)
+    cursor.execute("SELECT mtime, children FROM files WHERE id = ?", (file_id,))
     row = cursor.fetchone()
     if row is None:
       return None
@@ -227,3 +296,6 @@ class Scanner:
       target = EventTarget.Directory
 
     return children, target
+
+  def _file_id(self, scope: str, relative_path: str) -> str:
+    return f"{scope}:{relative_path}"

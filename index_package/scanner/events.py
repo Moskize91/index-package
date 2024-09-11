@@ -18,11 +18,16 @@ class Event:
   id: int
   kind: EventKind
   target: EventTarget
+  scope: str
   path: str
   mtime: float
 
 class EventSearcher:
-  def __init__(self, conn: sqlite3.Connection, cursor: sqlite3.Cursor) -> None:
+  def __init__(
+    self,
+    conn: sqlite3.Connection,
+    cursor: sqlite3.Cursor,
+  ) -> None:
     self._conn: sqlite3.Connection = conn
     self._cursor: sqlite3.Cursor = cursor
     self._events: Optional[list[Event]] = None
@@ -67,7 +72,7 @@ class EventSearcher:
   def _fetch_events_group(self) -> Optional[list[Event]]:
     group_size = 45
     row = self._cursor.execute(
-      "SELECT id, kind, target, path, mtime FROM events ORDER BY id LIMIT ?", (group_size,),
+      "SELECT id, kind, target, path, scope, mtime FROM events ORDER BY id LIMIT ?", (group_size,),
     )
     rows = row.fetchall()
     if len(rows) == 0:
@@ -80,7 +85,8 @@ class EventSearcher:
         kind=EventKind(row[1]),
         target=EventTarget(row[2]),
         path=row[3],
-        mtime=row[4],
+        scope=row[4],
+        mtime=row[5],
       ))
     events.reverse()
     return events

@@ -19,6 +19,7 @@ class ChunkChildRef:
   uid: str
   path: str
 
+# it's useless now
 class ChunkHub:
   def __init__(self, db_path: str):
     self._conn: sqlite3.Connection = self._connect(db_path)
