@@ -14,8 +14,9 @@ class PdfPageUpdatedEvent:
   removed_page_hashes: list[str]
 
 class PdfPage:
-  def __init__(self, parent, hash: str):
-    self.hash: str= hash
+  def __init__(self, parent, index: int, hash: str):
+    self.index: int = index
+    self.hash: str = hash
     self._parent = parent
     self._annotations: Optional[list[Annotation]] = None
     self._snapshot: Optional[str] = None
@@ -50,12 +51,20 @@ class PdfParser:
     if not os.path.exists(self._pages_path):
       os.makedirs(self._pages_path, exist_ok=True)
 
-  def pages(self, hash: str) -> list[PdfPage]:
+  def pages(self, pdf_hash: str) -> list[PdfPage]:
     pdf_pages: list[PdfPage] = []
-    for page_hash in self._select_page_hashes(hash):
-      pdf_page = PdfPage(self, page_hash)
+    for i, page_hash in enumerate(self._select_page_hashes(pdf_hash)):
+      pdf_page = PdfPage(self, i, page_hash)
       pdf_pages.append(pdf_page)
     return pdf_pages
+
+  def page(self, page_hash: str) -> Optional[PdfPage]:
+    self._cursor.execute("SELECT page_index FROM pages WHERE page_hash = ? LIMIT 1", (page_hash,))
+    row = self._cursor.fetchone()
+    if row is not None:
+      return PdfPage(self, row[0], page_hash)
+    else:
+      return None
 
   def add_file(self, hash: str, file_path: str) -> PdfPageUpdatedEvent:
     origin_page_hashes = self._select_page_hashes(hash) # logically no, but for compatibility
@@ -169,7 +178,7 @@ class PdfParser:
       added_hashes: list[str] = []
 
       for to_remove_hash in to_remove_hashes:
-        self._cursor.execute("SELECT * FROM pages WHERE page_hash = ?", (to_remove_hash,))
+        self._cursor.execute("SELECT * FROM pages WHERE page_hash = ? LIMIT 1", (to_remove_hash,))
         if self._cursor.fetchone() is None:
           removed_hashes.append(to_remove_hash)
 
@@ -196,9 +205,9 @@ class PdfParser:
       cursor.execute("""
         CREATE TABLE pages (
           id INTEGER PRIMARY KEY,
-          pdf_hash TEXT,
-          page_index TEXT,
-          page_hash TEXT
+          pdf_hash TEXT NOT NULL,
+          page_index TEXT NOT NULL,
+          page_hash TEXT NOT NULL
         )
       """)
       cursor.execute("""
