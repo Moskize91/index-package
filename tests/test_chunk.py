@@ -2,7 +2,7 @@ import os
 import unittest
 
 from typing import Optional
-from index_package.chunk import Chunk, ChunkHub
+from index_package.scanner.chunk import Chunk, ChunkHub
 from tests.utils import get_temp_path
 
 class TestChunk(unittest.TestCase):
