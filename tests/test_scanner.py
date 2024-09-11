@@ -3,21 +3,24 @@ import time
 import shutil
 import unittest
 
-from index_package.scanner import scan, EventKind, EventSearcher, EventTarget
+from index_package.scanner import Scanner, EventKind, EventSearcher, EventTarget
 from tests.utils import get_temp_path
 
 class TestScanner(unittest.TestCase):
 
   def test_scanning_folder(self):
     scan_path, db_path = self.setup_paths()
-
-    self._test_insert_files(scan_path, db_path)
+    scanner = Scanner(
+      db_path=db_path,
+      sources={ "test": scan_path },
+    )
+    self._test_insert_files(scan_path, scanner)
     time.sleep(0.1)
-    self._test_modify_part_of_files(scan_path, db_path)
+    self._test_modify_part_of_files(scan_path, scanner)
     time.sleep(0.1)
-    self._test_delete_recursively(scan_path, db_path)
+    self._test_delete_recursively(scan_path, scanner)
 
-  def _test_insert_files(self, scan_path: str, db_path: str):
+  def _test_insert_files(self, scan_path: str, scanner: Scanner):
     self.set_file(scan_path, "./foobar", "hello world")
     self.set_file(scan_path, "./earth/land", "this is a land")
     self.set_file(scan_path, "./earth/sea", "this is sea")
@@ -25,7 +28,7 @@ class TestScanner(unittest.TestCase):
     self.set_file(scan_path, "./universe/sun/sun2", "this is sun1")
     self.set_file(scan_path, "./universe/moon/moon1", "this is moon1")
 
-    with scan(scan_path, db_path) as events:
+    with scanner.scan("test") as events:
       path_list: list[str] = []
       for event in events:
         path_list.append(event.path)
@@ -38,13 +41,13 @@ class TestScanner(unittest.TestCase):
         "/universe/sun", "/universe/sun/sun1", "/universe/sun/sun2",
       ])
 
-  def _test_modify_part_of_files(self, scan_path: str, db_path: str):
+  def _test_modify_part_of_files(self, scan_path: str, scanner: Scanner):
     self.set_file(scan_path, "./foobar", "file is foobar")
     self.set_file(scan_path, "./universe/moon/moon2", "this is moon2")
     self.set_file(scan_path, "./universe/moon/moon3", "this is moon3")
     self.del_file(scan_path, "./universe/sun/sun2")
 
-    with scan(scan_path, db_path) as events:
+    with scanner.scan("test") as events:
       added_path_list, removed_path_list, updated_path_list = self._classify_events(events)
       self.assertListEqual(added_path_list, [
         ("/universe/moon/moon2", EventTarget.File),
@@ -59,10 +62,10 @@ class TestScanner(unittest.TestCase):
         ("/universe/sun/sun2", EventTarget.File),
       ])
 
-  def _test_delete_recursively(self, scan_path: str, db_path: str):
+  def _test_delete_recursively(self, scan_path: str, scanner: Scanner):
     self.del_file(scan_path, "./universe")
 
-    with scan(scan_path, db_path) as events:
+    with scanner.scan("test") as events:
       added_path_list, removed_path_list, updated_path_list = self._classify_events(events)
       self.assertListEqual(added_path_list, [])
       self.assertListEqual(updated_path_list, [
