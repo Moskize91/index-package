@@ -1,4 +1,5 @@
 import os
+import io
 import re
 import pdfplumber
 import json
@@ -85,11 +86,14 @@ class PdfExtractor:
       page = pdf_file.pages[0]
       annotations = self._extract_annotations(page)
       snapshot = page.extract_text_simple()
+      snapshot = self._standardize_text(snapshot)
 
       for annotation in annotations:
         quad_points = annotation.quad_points
         if quad_points is not None:
-          annotation.extracted_text = self._extract_selected_text(page, quad_points)
+          text = self._extract_selected_text(page, quad_points)
+          if text is not None:
+            annotation.extracted_text = self._standardize_text(text)
 
     if not self._is_all_whitespace(snapshot):
       with open(os.path.join(self._pages_path, f"{page_hash}.{_SNAPSHOT_EXT}"), "w", encoding="utf-8") as file:
@@ -215,6 +219,24 @@ class PdfExtractor:
 
   def _is_all_whitespace(self, string: str):
     return all(c.isspace() for c in string)
+
+  def _standardize_text(self, input_str: str) -> str:
+    buffer = io.StringIO()
+    state: int = 0 # 0: words, 1: space, 2: newline
+    for char in input_str:
+      if char.isspace():
+        if char == "\n":
+          state = 2
+        elif state == 0:
+          state = 1
+      else:
+        if state == 2:
+          buffer.write("\n")
+        elif state == 1:
+          buffer.write(" ")
+        buffer.write(char)
+        state = 0
+    return buffer.getvalue()
 
   def _annotation_to_json(self, annotation: Annotation) -> dict:
     to_json = {}

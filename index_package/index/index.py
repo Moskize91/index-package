@@ -1,10 +1,10 @@
 import os
 import sqlite3
 
-from typing import cast, Optional, Union
+from typing import cast, Any, Optional, Union
 from chromadb import PersistentClient
 from chromadb.api import ClientAPI
-from chromadb.api.types import EmbeddingFunction, IncludeEnum, Embeddable, Metadata, Document
+from chromadb.api.types import EmbeddingFunction, IncludeEnum, ID, Embeddable, Metadata, Document
 from ..parser import PdfParser, PdfPage, PdfPageUpdatedEvent
 from ..scanner import Event, EventKind, EventTarget
 from ..utils import hash_sha512
@@ -15,7 +15,7 @@ class Index:
     parser: PdfParser,
     db_path: str,
     scope_map: dict[str, str],
-    embedding_function: Optional[EmbeddingFunction[Embeddable]],
+    embedding_function: EmbeddingFunction[Embeddable],
   ):
     self._parser: PdfParser = parser
     self._scope_map: dict[str, str] = scope_map
@@ -29,23 +29,32 @@ class Index:
       embedding_function=embedding_function,
     )
 
-  def query(self, texts: Union[str, list[str]], results_limit: int = 10) -> list[dict]:
+  def query(self, texts: Union[str, list[str]], results_limit: int = 10) -> list[Any]:
     result = self._pages_db.query(
       query_texts=texts,
       n_results=results_limit,
     )
-    results: list[dict] = []
-    documents = cast(list[Metadata], result.get("documents", []))
-    metadatas = cast(list[Metadata], result.get("metadatas", []))
-    distances = cast(list[Metadata], result.get("distances", []))
+    results: list[list[dict]] = []
+    ids = cast(list[list[ID]], result.get("ids", []))
+    documents = cast(list[list[Document]], result.get("documents", []))
+    metadatas = cast(list[list[Metadata]], result.get("metadatas", []))
+    distances = cast(list[list[float]], result.get("distances", []))
 
     for i in range(len(documents)):
-      results.append({
-        "document": documents[i],
-        "metadata": metadatas[i],
-        "distance": distances[i],
-      })
-    return results
+      j_results: list[dict] = []
+      for j in range(len(documents[i])):
+        j_results.append({
+          "id": ids[i][j],
+          "document": documents[i][j],
+          "metadata": metadatas[i][j],
+          "distance": distances[i][j],
+        })
+      results.append(j_results)
+
+    if isinstance(texts, str):
+      return results[0]
+    else:
+      return results
 
   def handle_event(self, scope: str, event: Event):
     if event.target == EventTarget.Directory:
