@@ -1,21 +1,35 @@
 import os
 import sqlite3
 
-from typing import cast, Any, Optional, Union
+from typing import cast, Any, Optional
+from numpy import ndarray
+from sentence_transformers import SentenceTransformer
 from chromadb import PersistentClient
 from chromadb.api import ClientAPI
-from chromadb.api.types import EmbeddingFunction, IncludeEnum, ID, Embeddable, Metadata, Document
+from chromadb.api.types import EmbeddingFunction, IncludeEnum, ID, Documents, Embeddings, Embeddable, Metadata, Document
+
+from .types import PdfVectorResult, PdfQueryKind
 from ..parser import PdfParser, PdfPage, PdfPageUpdatedEvent
 from ..scanner import Event, EventKind, EventTarget
 from ..utils import hash_sha512
 
-class Index:
+class _EmbeddingFunction(EmbeddingFunction):
+  def __init__(self, model_id: str):
+    self._model = SentenceTransformer(model_id)
+
+  def __call__(self, input: Documents) -> Embeddings:
+    result = self._model.encode(input)
+    if not isinstance(result, ndarray):
+      raise ValueError("Model output is not a numpy array")
+    return result.tolist()
+
+class VectorIndex:
   def __init__(
     self,
     parser: PdfParser,
     db_path: str,
     scope_map: dict[str, str],
-    embedding_function: EmbeddingFunction[Embeddable],
+    embedding_model_id: str,
   ):
     self._parser: PdfParser = parser
     self._scope_map: dict[str, str] = scope_map
@@ -26,35 +40,38 @@ class Index:
     )
     self._pages_db = self._chromadb.get_or_create_collection(
       name="pages",
-      embedding_function=embedding_function,
+      embedding_function=_EmbeddingFunction(embedding_model_id),
     )
 
-  def query(self, texts: Union[str, list[str]], results_limit: int = 10) -> list[Any]:
+  def query(self, texts: list[str], results_limit: int = 10) -> list[list[PdfVectorResult]]:
     result = self._pages_db.query(
       query_texts=texts,
       n_results=results_limit,
     )
-    results: list[list[dict]] = []
     ids = cast(list[list[ID]], result.get("ids", []))
     documents = cast(list[list[Document]], result.get("documents", []))
     metadatas = cast(list[list[Metadata]], result.get("metadatas", []))
     distances = cast(list[list[float]], result.get("distances", []))
 
+    results: list[list[PdfVectorResult]] = []
     for i in range(len(documents)):
-      j_results: list[dict] = []
-      for j in range(len(documents[i])):
-        j_results.append({
-          "id": ids[i][j],
-          "document": documents[i][j],
-          "metadata": metadatas[i][j],
-          "distance": distances[i][j],
-        })
+      j_results: list[PdfVectorResult] = []
       results.append(j_results)
+      sub_ids = ids[i]
+      sub_documents = documents[i]
+      sub_metadatas = metadatas[i]
+      sub_distances = distances[i]
+      for j in range(len(sub_ids)):
+        j_result = self._to_vector_result(
+          id=sub_ids[j],
+          document=sub_documents[j],
+          metadata=sub_metadatas[j],
+          distance=sub_distances[j],
+        )
+        if j_result is not None:
+          j_results.append(j_result)
 
-    if isinstance(texts, str):
-      return results[0]
-    else:
-      return results
+    return results
 
   def handle_event(self, scope: str, event: Event):
     if event.target == EventTarget.Directory:
@@ -129,12 +146,14 @@ class Index:
         metadatas.append({
           "kind": "annotation.content",
           "index": i,
+          "pdf_hash": pdf_hash,
         })
       if annotation.extracted_text is not None:
         documents.append(annotation.extracted_text)
         metadatas.append({
           "kind": "annotation.extracted",
           "index": i,
+          "pdf_hash": pdf_hash,
         })
 
     ids: list[str] = []
@@ -171,6 +190,38 @@ class Index:
       for i in range(child_count):
         to_remove_ids.append(f"{page_hash}:{i}")
       self._pages_db.delete(ids=to_remove_ids)
+
+  def _to_vector_result(self, id: str, document: str, metadata: Metadata, distance: float) -> Optional[PdfVectorResult]:
+    kind = metadata.get("kind", None)
+    result: Optional[PdfVectorResult] = None
+    if kind == "page":
+      result = PdfVectorResult(
+        kind=PdfQueryKind.page,
+        page_hash=id,
+        pdf_hash=cast(str, metadata["pdf_hash"]),
+        index=cast(int, metadata["index"]),
+        text=document,
+        distance=distance,
+      )
+    elif kind == "annotation.content":
+      result = PdfVectorResult(
+        kind=PdfQueryKind.annotation_content,
+        page_hash=id.split(":")[0],
+        pdf_hash=cast(str, metadata["pdf_hash"]),
+        index=cast(int, metadata["index"]),
+        text=document,
+        distance=distance,
+      )
+    elif kind == "annotation.extracted":
+      result = PdfVectorResult(
+        kind=PdfQueryKind.annotation_extracted,
+        page_hash=id.split(":")[0],
+        pdf_hash=cast(str, metadata["pdf_hash"]),
+        index=cast(int, metadata["index"]),
+        text=document,
+        distance=distance,
+      )
+    return result
 
   def _connect(self, db_path: str) -> sqlite3.Connection:
     is_first_time = not os.path.exists(db_path)

@@ -1,21 +1,10 @@
 import os
 import unittest
 
-from typing import cast, Any
-from chromadb.api.types import Documents, Embeddings, EmbeddingFunction
-from sentence_transformers import SentenceTransformer
-
 from index_package.parser import PdfParser
 from index_package.scanner import Event, EventKind, EventTarget
-from index_package.index import Index
+from index_package.index import PdfQueryKind, VectorIndex
 from tests.utils import get_temp_path
-
-class MyEmbeddingFunction(EmbeddingFunction):
-  def __init__(self):
-    self._model = SentenceTransformer("shibing624/text2vec-base-chinese")
-
-  def __call__(self, input: Documents) -> Embeddings:
-    return cast(Any, self._model.encode(input)).tolist()
 
 class TestPdfParser(unittest.TestCase):
 
@@ -24,10 +13,10 @@ class TestPdfParser(unittest.TestCase):
       cache_path=get_temp_path("index/parser_cache"),
       temp_path=get_temp_path("index/temp"),
     )
-    index = Index(
+    index = VectorIndex(
       parser=parser,
       db_path=get_temp_path("index/db"),
-      embedding_function=MyEmbeddingFunction(),
+      embedding_model_id="shibing624/text2vec-base-chinese",
       scope_map={
         "assets": os.path.abspath(os.path.join(__file__, "../assets")),
       },
@@ -40,9 +29,13 @@ class TestPdfParser(unittest.TestCase):
       mtime=0,
     )
     index.handle_event("assets", added_event)
-    results = index.query("identify")
+    results = index.query(["identify"], results_limit=1)[0]
 
-    for result in results:
-      print("\n====================")
-      print("distance:", result["distance"])
-      print(result["document"])
+    self.assertEquals(len(results), 1)
+
+    annotation = results[0]
+    self.assertEquals(annotation.kind, PdfQueryKind.annotation_content)
+    self.assertEquals(annotation.page_hash, "Ayy2i4OK41YmIejdNJYTfyl6SgC_7zd7q05vDUenDOBEmN3T6gtKTC5gP5a_-dxufdntkgR3f2agbwww5a3AsA==")
+    self.assertEquals(annotation.pdf_hash, "8lMbEwyJykueeqwrQzrmFHt5usqlag47UpdUuFpXGfFptM13R3RUQ0AH0bCT93REjMbu25G43SFOduMehD_v8g==")
+    self.assertEquals(annotation.index, 0)
+    self.assertEquals(annotation.text, "Identification")
