@@ -84,7 +84,7 @@ class TestScanner(unittest.TestCase):
   def setup_paths(self) -> tuple[str, str]:
     temp_path = get_temp_path("scanner")
     scan_path = os.path.join(temp_path, "data")
-    db_path = os.path.join(temp_path, "scanner.db")
+    db_path = os.path.join(temp_path, "scanner.sqlite3")
 
     return scan_path, db_path
 

@@ -9,7 +9,7 @@ class TestChunk(unittest.TestCase):
 
   def test_chunk_operation(self):
     temp_path = get_temp_path("chunk")
-    db_path = os.path.join(temp_path, "chunk2.db")
+    db_path = os.path.join(temp_path, "chunk2.sqlite3")
     chunks = ChunkHub(db_path)
 
     foo_chunk = chunks.add("foo")

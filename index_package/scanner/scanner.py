@@ -112,6 +112,7 @@ class Scanner:
             origin_scopes.remove(scope)
 
       for to_remove_scope in origin_scopes:
+        # TODO: 将所有被删除的数据生成 events
         cursor.execute("DELETE FROM files WHERE scope = ?", (to_remove_scope,))
 
       conn.commit()

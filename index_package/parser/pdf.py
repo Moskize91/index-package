@@ -44,7 +44,7 @@ class PdfParser:
   def __init__(self, cache_path: str, temp_path: str) -> None:
     self._pages_path: str = os.path.join(cache_path, "pages")
     self._temp_folders: TempFolderHub = TempFolderHub(temp_path)
-    self._conn: sqlite3.Connection = self._connect(os.path.join(cache_path, "pages.db"))
+    self._conn: sqlite3.Connection = self._connect(os.path.join(cache_path, "pages.sqlite3"))
     self._cursor: sqlite3.Cursor = self._conn.cursor()
     self._extractor: PdfExtractor = PdfExtractor(self._pages_path)
 

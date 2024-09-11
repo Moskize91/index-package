@@ -1,7 +1,7 @@
 import os
 import sqlite3
 
-from typing import cast, Any, Optional
+from typing import cast, Optional
 from numpy import ndarray
 from sentence_transformers import SentenceTransformer
 from chromadb import PersistentClient
@@ -33,7 +33,7 @@ class VectorIndex:
   ):
     self._parser: PdfParser = parser
     self._scope_map: dict[str, str] = scope_map
-    self._conn: sqlite3.Connection = self._connect(os.path.join(db_path, "files.db"))
+    self._conn: sqlite3.Connection = self._connect(os.path.join(db_path, "files.sqlite3"))
     self._cursor: sqlite3.Cursor = self._conn.cursor()
     self._chromadb: ClientAPI = PersistentClient(
       path=os.path.join(db_path, "chromadb"),
@@ -43,7 +43,9 @@ class VectorIndex:
       embedding_function=_EmbeddingFunction(embedding_model_id),
     )
 
-  def query(self, texts: list[str], results_limit: int = 10) -> list[list[PdfVectorResult]]:
+  def query(self, texts: list[str], results_limit: Optional[int]) -> list[list[PdfVectorResult]]:
+    if results_limit is None:
+      results_limit = 10
     result = self._pages_db.query(
       query_texts=texts,
       n_results=results_limit,
@@ -73,12 +75,12 @@ class VectorIndex:
 
     return results
 
-  def handle_event(self, scope: str, event: Event):
+  def handle_event(self, event: Event):
     if event.target == EventTarget.Directory:
       return
 
     logic_path = event.path
-    scope_path = self._scope_map.get(scope, None)
+    scope_path = self._scope_map.get(event.scope, None)
 
     _, ext_name = os.path.splitext(logic_path)
     if ext_name.lower() != ".pdf":
@@ -90,7 +92,7 @@ class VectorIndex:
     hash: Optional[str] = None
     origin_hash: Optional[str] = None
     path = os.path.join(scope_path, f".{logic_path}")
-    file_id = self._encode_file_id(scope, logic_path)
+    file_id = self._encode_file_id(event.scope, logic_path)
 
     self._cursor.execute("SELECT hash FROM files WHERE id = ?", (file_id,))
     row = self._cursor.fetchone()
