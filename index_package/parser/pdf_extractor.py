@@ -14,7 +14,7 @@ _SNAPSHOT_EXT = "snapshot.txt"
 _ANNOTATION_EXT = "annotation.json"
 
 @dataclass
-class _Annotation:
+class Annotation:
   type: Optional[str]
   title: Optional[str]
   content: Optional[str]
@@ -76,7 +76,7 @@ class PdfExtractor:
 
   def extract_page(self, page_hash: str):
     global _PDF_EXT, _SNAPSHOT_EXT, _ANNOTATION_EXT
-    annotations: list[_Annotation]
+    annotations: list[Annotation]
     snapshot: str = ""
 
     with pdfplumber.open(os.path.join(self._pages_path, f"{page_hash}.{_PDF_EXT}")) as pdf_file:
@@ -99,25 +99,8 @@ class PdfExtractor:
       with open(os.path.join(self._pages_path, f"{page_hash}.{_ANNOTATION_EXT}"), 'w', encoding='utf-8') as file:
         annotation_json: list[dict] = []
         for annotation in annotations:
-          to_json = {}
+          to_json = self._annotation_to_json(annotation)
           annotation_json.append(to_json)
-          if annotation.type is not None:
-            to_json["type"] = annotation.type
-          if annotation.title is not None:
-            to_json["title"] = annotation.title
-          if annotation.content is not None:
-            to_json["content"] = annotation.content
-          if annotation.uri is not None:
-            to_json["uri"] = annotation.uri
-          if annotation.created_at is not None:
-            to_json["createdAt"] = annotation.created_at
-          if annotation.updated_at is not None:
-            to_json["updatedAt"] = annotation.updated_at
-          if annotation.quad_points is not None:
-            to_json["quadPoints"] = annotation.quad_points
-          if annotation.extracted_text is not None:
-            to_json["extractedText"] = annotation.extracted_text
-
         json.dump(annotation_json, file, ensure_ascii=False)
 
   def remove_page(self, page_hash: str):
@@ -127,12 +110,34 @@ class PdfExtractor:
       if os.path.exists(file_path):
         os.remove(file_path)
 
-  def _extract_annotations(self, page: Page) -> list[_Annotation]:
-    annotations: list[_Annotation] = []
+  def read_annotations(self, page_hash: str) -> list[Annotation]:
+    global _ANNOTATION_EXT
+    annotations: list[Annotation] = []
+    file_path = os.path.join(self._pages_path, f"{page_hash}.{_ANNOTATION_EXT}")
+    if not os.path.exists(file_path):
+      return annotations
+
+    with open(file_path, "r", encoding="utf-8") as file:
+      annotation_json = json.load(file)
+      for json_data in annotation_json:
+        annotations.append(self._annotation_from_json(json_data))
+    return annotations
+
+  def read_snapshot(self, page_hash: str) -> str:
+    global _SNAPSHOT_EXT
+    file_path = os.path.join(self._pages_path, f"{page_hash}.{_SNAPSHOT_EXT}")
+    if not os.path.exists(file_path):
+      return ""
+
+    with open(file_path, "r", encoding="utf-8") as file:
+      return file.read()
+
+  def _extract_annotations(self, page: Page) -> list[Annotation]:
+    annotations: list[Annotation] = []
     for anno in page.annots:
       if anno.get("object_type", "") != "annot":
         continue
-      annotation = _Annotation(
+      annotation = Annotation(
         type=None,
         title=anno.get("title", None),
         content=anno.get("contents", None),
@@ -210,3 +215,35 @@ class PdfExtractor:
 
   def _is_all_whitespace(self, string: str):
     return all(c.isspace() for c in string)
+
+  def _annotation_to_json(self, annotation: Annotation) -> dict:
+    to_json = {}
+    if annotation.type is not None:
+      to_json["type"] = annotation.type
+    if annotation.title is not None:
+      to_json["title"] = annotation.title
+    if annotation.content is not None:
+      to_json["content"] = annotation.content
+    if annotation.uri is not None:
+      to_json["uri"] = annotation.uri
+    if annotation.created_at is not None:
+      to_json["createdAt"] = annotation.created_at
+    if annotation.updated_at is not None:
+      to_json["updatedAt"] = annotation.updated_at
+    if annotation.quad_points is not None:
+      to_json["quadPoints"] = annotation.quad_points
+    if annotation.extracted_text is not None:
+      to_json["extractedText"] = annotation.extracted_text
+    return to_json
+
+  def _annotation_from_json(self, json_data: dict) -> Annotation:
+    return Annotation(
+      type=json_data.get("type", None),
+      title=json_data.get("title", None),
+      content=json_data.get("content", None),
+      uri=json_data.get("uri", None),
+      created_at=json_data.get("createdAt", None),
+      updated_at=json_data.get("updatedAt", None),
+      quad_points=json_data.get("quadPoints", None),
+      extracted_text=json_data.get("extractedText", None),
+    )

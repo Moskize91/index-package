@@ -3,16 +3,40 @@ import shutil
 import sqlite3
 import pikepdf
 
-from .pdf_extractor import PdfExtractor
+from typing import cast, Optional
+from dataclasses import dataclass
+from .pdf_extractor import PdfExtractor, Annotation
 from ..utils import hash_sha512, TempFolderHub
+
+@dataclass
+class PdfPageUpdatedEvent:
+  added_page_hashes: list[str]
+  removed_page_hashes: list[str]
 
 class PdfPage:
   def __init__(self, parent, hash: str):
     self.hash: str= hash
     self._parent = parent
+    self._annotations: Optional[list[Annotation]] = None
+    self._snapshot: Optional[str] = None
 
-  def path(self) -> str:
+  @property
+  def pdf_path(self) -> str:
     return os.path.join(self._parent._pages_path, f"{self.hash}.pdf")
+
+  @property
+  def annotations(self) -> list[Annotation]:
+    if self._annotations is None:
+      extractor = cast(PdfExtractor, self._parent._extractor)
+      self._annotations = extractor.read_annotations(self.hash)
+    return self._annotations
+
+  @property
+  def snapshot(self) -> str:
+    if self._snapshot is None:
+      extractor = cast(PdfExtractor, self._parent._extractor)
+      self._snapshot = extractor.read_snapshot(self.hash)
+    return self._snapshot
 
 # https://pikepdf.readthedocs.io/en/latest/
 class PdfParser:
@@ -33,8 +57,8 @@ class PdfParser:
       pdf_pages.append(pdf_page)
     return pdf_pages
 
-  def add_file(self, hash: str, file_path: str):
-    origin_page_hashes = self._select_page_hashes(hash)
+  def add_file(self, hash: str, file_path: str) -> PdfPageUpdatedEvent:
+    origin_page_hashes = self._select_page_hashes(hash) # logically no, but for compatibility
     new_page_hashes = self._extract_page_hashes(file_path)
     added_page_hashes, removed_page_hashes = self._update_db(origin_page_hashes, new_page_hashes, hash)
 
@@ -44,7 +68,12 @@ class PdfParser:
     for page_hash in removed_page_hashes:
       self._extractor.remove_page(page_hash)
 
-  def remove_file(self, hash: str):
+    return PdfPageUpdatedEvent(
+      added_page_hashes,
+      removed_page_hashes,
+    )
+
+  def remove_file(self, hash: str) -> PdfPageUpdatedEvent:
     page_hashes = self._select_page_hashes(hash)
     try:
       self._cursor.execute("BEGIN TRANSACTION")
@@ -53,10 +82,17 @@ class PdfParser:
     except Exception as e:
       self._conn.rollback()
       raise e
+
+    removed_page_hashes: list[str] = []
     for page_hash in page_hashes:
       self._cursor.execute("SELECT * FROM pages WHERE page_hash = ?", (page_hash,))
       if self._cursor.fetchone() is None:
-        self._extractor.remove_page(page_hash)
+        removed_page_hashes.append(page_hash)
+
+    for page_hash in removed_page_hashes:
+      self._extractor.remove_page(page_hash)
+
+    return PdfPageUpdatedEvent([], removed_page_hashes)
 
   def _select_page_hashes(self, hash: str) -> list[str]:
     self._cursor.execute(

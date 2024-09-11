@@ -1,8 +1,8 @@
 import os
 import sqlite3
 
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
 from .events import EventKind, EventSearcher, EventTarget
 
 @dataclass
@@ -205,7 +205,6 @@ def _select_file(cursor: sqlite3.Cursor, relative_path: str) -> Optional[_File]:
     children = children_str.split("/")
 
   return _File(relative_path, mtime, children)
-
 
 def file_inserted_children_and_target(file: _File) -> tuple[Optional[str], EventTarget]:
   children: Optional[str] = None
