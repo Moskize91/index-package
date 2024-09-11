@@ -3,7 +3,7 @@ import time
 import shutil
 import unittest
 
-from index_package import scan, EventKind, EventSearcher, EventTarget
+from index_package.scanner import scan, EventKind, EventSearcher, EventTarget
 from tests.utils import get_temp_path
 
 class TestScanner(unittest.TestCase):
