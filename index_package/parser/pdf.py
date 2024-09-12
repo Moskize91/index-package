@@ -6,7 +6,7 @@ import pikepdf
 from typing import cast, Optional
 from dataclasses import dataclass
 from .pdf_extractor import PdfExtractor, Annotation
-from ..utils import hash_sha512, TempFolderHub
+from ..utils import hash_sha512, ensure_parent_dir, TempFolderHub
 
 @dataclass
 class PdfPageUpdatedEvent:
@@ -42,9 +42,10 @@ class PdfPage:
 # https://pikepdf.readthedocs.io/en/latest/
 class PdfParser:
   def __init__(self, cache_path: str, temp_path: str) -> None:
+    db_path = ensure_parent_dir(os.path.join(cache_path, "pages.sqlite3"))
     self._pages_path: str = os.path.join(cache_path, "pages")
     self._temp_folders: TempFolderHub = TempFolderHub(temp_path)
-    self._conn: sqlite3.Connection = self._connect(os.path.join(cache_path, "pages.sqlite3"))
+    self._conn: sqlite3.Connection = self._connect(db_path)
     self._cursor: sqlite3.Cursor = self._conn.cursor()
     self._extractor: PdfExtractor = PdfExtractor(self._pages_path)
 

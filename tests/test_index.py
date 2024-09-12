@@ -15,7 +15,7 @@ class TestPdfParser(unittest.TestCase):
     )
     index = VectorIndex(
       parser=parser,
-      db_path=get_temp_path("index/db"),
+      root_dir_path=get_temp_path("index/db"),
       embedding_model_id="shibing624/text2vec-base-chinese",
       scope_map={
         "assets": os.path.abspath(os.path.join(__file__, "../assets")),

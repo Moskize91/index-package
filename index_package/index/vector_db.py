@@ -11,7 +11,7 @@ from chromadb.api.types import EmbeddingFunction, IncludeEnum, ID, Documents, Em
 from .types import PdfVectorResult, PdfQueryKind
 from ..parser import PdfParser, PdfPage, PdfPageUpdatedEvent
 from ..scanner import Event, EventKind, EventTarget
-from ..utils import hash_sha512
+from ..utils import hash_sha512, ensure_parent_dir
 
 class _EmbeddingFunction(EmbeddingFunction):
   def __init__(self, model_id: str):
@@ -27,16 +27,17 @@ class VectorIndex:
   def __init__(
     self,
     parser: PdfParser,
-    db_path: str,
+    root_dir_path: str,
     scope_map: dict[str, str],
     embedding_model_id: str,
   ):
+    files_db_path = ensure_parent_dir(os.path.join(root_dir_path, "files.sqlite3"))
     self._parser: PdfParser = parser
     self._scope_map: dict[str, str] = scope_map
-    self._conn: sqlite3.Connection = self._connect(os.path.join(db_path, "files.sqlite3"))
+    self._conn: sqlite3.Connection = self._connect(files_db_path)
     self._cursor: sqlite3.Cursor = self._conn.cursor()
     self._chromadb: ClientAPI = PersistentClient(
-      path=os.path.join(db_path, "chromadb"),
+      path=os.path.join(root_dir_path, "chromadb"),
     )
     self._pages_db = self._chromadb.get_or_create_collection(
       name="pages",

@@ -5,6 +5,7 @@ from typing import Optional
 from ..scanner import Scanner
 from ..parser import PdfParser
 from ..index import VectorIndex, PdfVectorResult
+from ..utils import ensure_parent_dir
 
 class Service:
   def __init__(
@@ -15,11 +16,11 @@ class Service:
   ):
     self._sources: dict[str, str] = sources.copy()
     self._scanner: Scanner = Scanner(
-      db_path=os.path.join(workspace_path, "scanner.sqlite3"),
+      db_path=ensure_parent_dir(os.path.join(workspace_path, "scanner.sqlite3")),
       sources=self._sources,
     )
     self._index: VectorIndex = VectorIndex(
-      db_path=os.path.join(workspace_path, "indexes"),
+      root_dir_path=os.path.join(workspace_path, "indexes"),
       scope_map=self._sources,
       embedding_model_id=embedding_model_id,
       parser=PdfParser(
