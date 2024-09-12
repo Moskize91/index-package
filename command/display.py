@@ -5,6 +5,9 @@ def show_results(service: Service, results: list[PdfVectorResult]):
   print(f"Found {len(results)} results")
   print("")
 
+  # command will see the bottom item first
+  results.reverse()
+
   for result in results:
     print("========================================")
     if result.kind == PdfQueryKind.page:
@@ -22,5 +25,5 @@ def show_results(service: Service, results: list[PdfVectorResult]):
         print(f"  {file}")
 
     print("----------------------------------------")
-    print(f"Text: {result.text}")
+    print(result.text)
     print("")
