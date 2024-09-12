@@ -43,7 +43,7 @@ class VectorIndex:
       embedding_function=_EmbeddingFunction(embedding_model_id),
     )
 
-  def query(self, texts: list[str], results_limit: Optional[int]) -> list[list[PdfVectorResult]]:
+  def query(self, texts: list[str], results_limit: Optional[int] = None) -> list[list[PdfVectorResult]]:
     if results_limit is None:
       results_limit = 10
     result = self._pages_db.query(
