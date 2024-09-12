@@ -13,7 +13,9 @@
     "pdfplumber",
     "pdfs",
     "pikepdf",
+    "sents",
     "shibing",
+    "spacy",
     "tqdm",
     "uids"
   ]
