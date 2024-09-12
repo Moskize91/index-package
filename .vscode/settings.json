@@ -13,6 +13,8 @@
     "pdfplumber",
     "pdfs",
     "pikepdf",
+    "shibing",
+    "tqdm",
     "uids"
   ]
 }

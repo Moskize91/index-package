@@ -11,7 +11,8 @@ from chromadb.api.types import EmbeddingFunction, IncludeEnum, ID, Documents, Em
 from .types import PdfVectorResult, PdfQueryKind
 from ..parser import PdfParser, PdfPage, PdfPageUpdatedEvent
 from ..scanner import Event, EventKind, EventTarget
-from ..utils import hash_sha512
+from ..progress import Progress
+from ..utils import hash_sha512, ensure_parent_dir
 
 class _EmbeddingFunction(EmbeddingFunction):
   def __init__(self, model_id: str):
@@ -27,16 +28,17 @@ class VectorIndex:
   def __init__(
     self,
     parser: PdfParser,
-    db_path: str,
+    root_dir_path: str,
     scope_map: dict[str, str],
     embedding_model_id: str,
   ):
+    files_db_path = ensure_parent_dir(os.path.join(root_dir_path, "files.sqlite3"))
     self._parser: PdfParser = parser
     self._scope_map: dict[str, str] = scope_map
-    self._conn: sqlite3.Connection = self._connect(os.path.join(db_path, "files.sqlite3"))
+    self._conn: sqlite3.Connection = self._connect(files_db_path)
     self._cursor: sqlite3.Cursor = self._conn.cursor()
     self._chromadb: ClientAPI = PersistentClient(
-      path=os.path.join(db_path, "chromadb"),
+      path=os.path.join(root_dir_path, "chromadb"),
     )
     self._pages_db = self._chromadb.get_or_create_collection(
       name="pages",
@@ -75,7 +77,19 @@ class VectorIndex:
 
     return results
 
-  def handle_event(self, event: Event):
+  def hash_to_files(self, hash: str) -> list[str]:
+    self._cursor.execute("SELECT id FROM files WHERE hash = ?", (hash,))
+    files: list[str] = []
+
+    for row in self._cursor.fetchall():
+      scope, path = self._decode_file_id(row[0])
+      scope_path = self._scope_map.get(scope, None)
+      if scope_path is not None:
+        files.append(os.path.abspath(os.path.join(scope_path, f".{path}")))
+
+    return files
+
+  def handle_event(self, event: Event, progress: Progress = Progress()):
     if event.target == EventTarget.Directory:
       return
 
@@ -120,7 +134,7 @@ class VectorIndex:
       self._cursor.execute("SELECT COUNT(*) FROM files WHERE hash = ?", (hash,))
       num_rows = self._cursor.fetchone()[0]
       if num_rows == 1:
-        parser_event = self._parser.add_file(hash, path)
+        parser_event = self._parser.add_file(hash, path, progress)
         self._handle_parser_event(hash, parser_event)
 
     if origin_hash is not None:
@@ -201,7 +215,7 @@ class VectorIndex:
         kind=PdfQueryKind.page,
         page_hash=id,
         pdf_hash=cast(str, metadata["pdf_hash"]),
-        index=cast(int, metadata["index"]),
+        index=int(cast(str, metadata["index"])),
         text=document,
         distance=distance,
       )
@@ -210,7 +224,7 @@ class VectorIndex:
         kind=PdfQueryKind.annotation_content,
         page_hash=id.split(":")[0],
         pdf_hash=cast(str, metadata["pdf_hash"]),
-        index=cast(int, metadata["index"]),
+        index=int(cast(str, metadata["index"])),
         text=document,
         distance=distance,
       )
@@ -219,7 +233,7 @@ class VectorIndex:
         kind=PdfQueryKind.annotation_extracted,
         page_hash=id.split(":")[0],
         pdf_hash=cast(str, metadata["pdf_hash"]),
-        index=cast(int, metadata["index"]),
+        index=int(cast(str, metadata["index"])),
         text=document,
         distance=distance,
       )
@@ -249,3 +263,7 @@ class VectorIndex:
 
   def _encode_file_id(self, scope: str, logic_path: str) -> str:
     return f"{scope}:{logic_path}"
+
+  def _decode_file_id(self, id: str) -> tuple[str, str]:
+    parts = id.split(":", 1)
+    return parts[0], parts[1]

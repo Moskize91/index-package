@@ -3,6 +3,7 @@ import sqlite3
 
 from dataclasses import dataclass
 from typing import Optional
+
 from .events import EventKind, EventSearcher, EventTarget
 
 @dataclass
@@ -82,6 +83,7 @@ class Scanner:
           mtime REAL NOT NULL
         )
       ''')
+      # TODO: 需要存储 path，以便 sources 变化时能读取到上一次的数据
       cursor.execute('''
         CREATE TABLE scopes (
           name TEXT PRIMARY KEY
@@ -106,10 +108,10 @@ class Scanner:
     try:
       cursor.execute("BEGIN TRANSACTION")
       for scope in self._sources.keys():
-        if scope not in origin_scopes:
+        if scope in origin_scopes:
+          origin_scopes.remove(scope)
+        else:
           cursor.execute("INSERT INTO scopes (name) VALUES (?)", (scope,))
-          if scope in origin_scopes:
-            origin_scopes.remove(scope)
 
       for to_remove_scope in origin_scopes:
         # TODO: 将所有被删除的数据生成 events
@@ -131,6 +133,7 @@ class Scanner:
   ) -> Optional[list[str]]:
 
     abs_path = os.path.join(scan_path, f".{relative_path}")
+    abs_path = os.path.abspath(abs_path)
     old_file = self._select_file(cursor, scope, relative_path)
     new_file: Optional[_File] = None
     mtime_never_change = False
