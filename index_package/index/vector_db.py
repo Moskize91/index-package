@@ -16,9 +16,12 @@ from ..utils import hash_sha512, ensure_parent_dir
 
 class _EmbeddingFunction(EmbeddingFunction):
   def __init__(self, model_id: str):
-    self._model = SentenceTransformer(model_id)
+    self._model_id: str = model_id
+    self._model: Optional[SentenceTransformer] = None
 
   def __call__(self, input: Documents) -> Embeddings:
+    if self._model is None:
+      self._model = SentenceTransformer(self._model_id)
     result = self._model.encode(input)
     if not isinstance(result, ndarray):
       raise ValueError("Model output is not a numpy array")

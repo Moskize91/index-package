@@ -1,10 +1,7 @@
 from index_package import Service, PdfVectorResult, PdfQueryKind
 
 
-def show_results(service: Service, results: list[PdfVectorResult]):
-  print(f"Found {len(results)} results")
-  print("")
-
+def show_results(text: list[str], service: Service, results: list[PdfVectorResult]):
   # command will see the bottom item first
   results.reverse()
 
@@ -27,3 +24,8 @@ def show_results(service: Service, results: list[PdfVectorResult]):
     print("----------------------------------------")
     print(result.text)
     print("")
+
+  query_text = ", ".join(text)
+
+  print(f"Query: {query_text}")
+  print(f"Found {len(results)} results")

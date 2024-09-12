@@ -14,11 +14,7 @@ def main():
     prog="Index Package",
     description="scan your files & save into index database",
   )
-  parser.add_argument(
-    "command",
-    type=str,
-    choices=["scan", "query", "purge"],
-  )
+  parser.add_argument("text", nargs='*', type=str, default="")
   parser.add_argument(
     "-p", "--package",
     default=".",
@@ -27,10 +23,20 @@ def main():
     type=str,
   )
   parser.add_argument(
-    "-t", "--text",
-    help="workspace directory path (default: current directory)",
+    "--scan",
+    default=False,
+    help="scan all directories",
     required=False,
-    type=str,
+    type=bool,
+    action=argparse.BooleanOptionalAction,
+  )
+  parser.add_argument(
+    "--purge",
+    default=False,
+    help="purge all index data",
+    required=False,
+    type=bool,
+    action=argparse.BooleanOptionalAction,
   )
   parser.add_argument(
     "--limit",
@@ -43,7 +49,9 @@ def main():
   package, workspace_path = _package_and_path(args.package)
   workspace_path = os.path.join(workspace_path, "workspace")
 
-  if args.command == "purge":
+  if args.purge == True:
+    if args.scan == True:
+      raise Exception("Cannot scan and purge at the same time")
     if os.path.exists(workspace_path):
       shutil.rmtree(workspace_path)
   else:
@@ -54,21 +62,22 @@ def main():
       embedding_model_id=embedding,
       sources=sources,
     )
-    if args.command == "scan":
+    if args.scan == True:
       listeners = _create_progress_listeners()
       service.scan(listeners)
-
-    elif args.command == "query":
+    else:
       text = args.text
-      results_limit = args.limit
-      if text is None:
-        raise Exception("Text not provided")
+      if len(text) == 0:
+        print("Text not provided")
+      else:
+        if text is None:
+          raise Exception("You can search by providing text")
 
-      results = service.query(
-        texts=[text],
-        results_limit=results_limit,
-      )
-      show_results(service, results)
+        results = service.query(
+          texts=text,
+          results_limit=args.limit,
+        )
+        show_results(text, service, results)
 
 def _package_and_path(package_path: str) -> tuple[dict, str]:
   package_path = os.path.join(os.getcwd(), package_path)
