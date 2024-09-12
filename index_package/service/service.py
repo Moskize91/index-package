@@ -1,7 +1,6 @@
 import os
 
-from typing import Optional
-
+from typing import Optional, Union
 from ..scanner import Scanner
 from ..parser import PdfParser
 from ..index import VectorIndex, PdfVectorResult
@@ -34,8 +33,12 @@ class Service:
       for event in events:
         self._index.handle_event(event)
 
-  def query(self, texts: list[str], results_limit: Optional[int]) -> list[PdfVectorResult]:
+  def query(self, texts: Union[list, list[str]], results_limit: Optional[int]) -> list[PdfVectorResult]:
+    if isinstance(texts, str):
+      texts = [texts]
+
     results: list[PdfVectorResult] = []
+
     for sub_results in self._index.query(texts, results_limit):
       for result in sub_results:
         results.append(result)
@@ -43,3 +46,6 @@ class Service:
     results.sort(key=lambda result: result.distance)
 
     return results
+
+  def files(self, hash: str) -> list[str]:
+    return self._index.hash_to_files(hash)

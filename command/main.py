@@ -3,6 +3,7 @@ import json
 import argparse
 
 from index_package import Service
+from command.display import show_results
 
 def main():
   parser = argparse.ArgumentParser(
@@ -56,7 +57,7 @@ def main():
       texts=[text],
       results_limit=results_limit,
     )
-    print(results[0])
+    show_results(service, results)
 
 def _package_and_path(package_path: str) -> tuple[dict, str]:
   package_path = os.path.join(os.getcwd(), package_path)

@@ -82,6 +82,7 @@ class Scanner:
           mtime REAL NOT NULL
         )
       ''')
+      # TODO: 需要存储 path，以便 sources 变化时能读取到上一次的数据
       cursor.execute('''
         CREATE TABLE scopes (
           name TEXT PRIMARY KEY
