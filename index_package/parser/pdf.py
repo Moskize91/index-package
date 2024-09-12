@@ -5,7 +5,9 @@ import pikepdf
 
 from typing import cast, Optional
 from dataclasses import dataclass
+
 from .pdf_extractor import PdfExtractor, Annotation
+from ..progress import Progress
 from ..utils import hash_sha512, ensure_parent_dir, TempFolderHub
 
 @dataclass
@@ -67,13 +69,15 @@ class PdfParser:
     else:
       return None
 
-  def add_file(self, hash: str, file_path: str) -> PdfPageUpdatedEvent:
+  def add_file(self, hash: str, file_path: str, progress: Progress = Progress()) -> PdfPageUpdatedEvent:
     origin_page_hashes = self._select_page_hashes(hash) # logically no, but for compatibility
     new_page_hashes = self._extract_page_hashes(file_path)
     added_page_hashes, removed_page_hashes = self._update_db(origin_page_hashes, new_page_hashes, hash)
+    added_pages_count = len(added_page_hashes)
 
-    for page_hash in added_page_hashes:
+    for i, page_hash in enumerate(added_page_hashes):
       self._extractor.extract_page(page_hash)
+      progress.complete_handle_pdf_page(i + 1, added_pages_count)
 
     for page_hash in removed_page_hashes:
       self._extractor.remove_page(page_hash)

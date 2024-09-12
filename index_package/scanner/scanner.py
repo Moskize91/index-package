@@ -3,6 +3,7 @@ import sqlite3
 
 from dataclasses import dataclass
 from typing import Optional
+
 from .events import EventKind, EventSearcher, EventTarget
 
 @dataclass

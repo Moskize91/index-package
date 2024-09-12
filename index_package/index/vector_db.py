@@ -11,6 +11,7 @@ from chromadb.api.types import EmbeddingFunction, IncludeEnum, ID, Documents, Em
 from .types import PdfVectorResult, PdfQueryKind
 from ..parser import PdfParser, PdfPage, PdfPageUpdatedEvent
 from ..scanner import Event, EventKind, EventTarget
+from ..progress import Progress
 from ..utils import hash_sha512, ensure_parent_dir
 
 class _EmbeddingFunction(EmbeddingFunction):
@@ -88,7 +89,7 @@ class VectorIndex:
 
     return files
 
-  def handle_event(self, event: Event):
+  def handle_event(self, event: Event, progress: Progress = Progress()):
     if event.target == EventTarget.Directory:
       return
 
@@ -133,7 +134,7 @@ class VectorIndex:
       self._cursor.execute("SELECT COUNT(*) FROM files WHERE hash = ?", (hash,))
       num_rows = self._cursor.fetchone()[0]
       if num_rows == 1:
-        parser_event = self._parser.add_file(hash, path)
+        parser_event = self._parser.add_file(hash, path, progress)
         self._handle_parser_event(hash, parser_event)
 
     if origin_hash is not None:

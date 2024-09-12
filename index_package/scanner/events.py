@@ -1,6 +1,6 @@
-from enum import Enum
 import sqlite3
 
+from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
 
@@ -32,6 +32,12 @@ class EventSearcher:
     self._cursor: sqlite3.Cursor = cursor
     self._events: Optional[list[Event]] = None
     self._did_completed = False
+    self._cursor.execute("SELECT COUNT(*) FROM events")
+    self._count: int = self._cursor.fetchone()[0]
+
+  @property
+  def count(self) -> int:
+    return self._count
 
   def __enter__(self):
     return self
@@ -67,6 +73,7 @@ class EventSearcher:
       self._cursor.execute("DELETE FROM events WHERE id <= ?", (event.id,))
       self._conn.commit()
 
+    self._count -= 1
     return event
 
   def _fetch_events_group(self) -> Optional[list[Event]]:
