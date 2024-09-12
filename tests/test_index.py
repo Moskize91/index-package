@@ -25,11 +25,11 @@ class TestPdfParser(unittest.TestCase):
       id=0,
       kind=EventKind.Added,
       target=EventTarget.File,
-      scope="test",
+      scope="assets",
       path="/The Analysis of the Transference.pdf",
       mtime=0,
     )
-    index.handle_event("assets", added_event)
+    index.handle_event(added_event)
     results = index.query(["identify"], results_limit=1)[0]
 
     self.assertEquals(len(results), 1)
