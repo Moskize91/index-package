@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import json
 import shutil
@@ -11,11 +13,18 @@ from .pdf_extractor import PdfExtractor, Annotation
 from ..progress import Progress
 from ..utils import hash_sha512, ensure_parent_dir, TempFolderHub
 
+@dataclass
+class Pdf:
+  hash: str
+  meta: dict[str, str]
+  pages: list[PdfPage]
+
 class PdfPage:
-  def __init__(self, parent, index: int, hash: str):
+  def __init__(self, parent, pdf_id: int, index: int, hash: str):
     self.index: int = index
     self.hash: str = hash
     self._parent = parent
+    self._pdf_id = pdf_id
     self._annotations: Optional[list[Annotation]] = None
     self._snapshot: Optional[str] = None
 
@@ -37,11 +46,8 @@ class PdfPage:
       self._snapshot = extractor.read_snapshot(self.hash)
     return self._snapshot
 
-@dataclass
-class Pdf:
-  hash: str
-  meta: dict[str, str]
-  pages: list[PdfPage]
+  def load_pdf(self) -> Pdf:
+    return cast(Pdf, self._parent._load_cached_pdf(self._pdf_id))
 
 # it's just for test unit now.
 @dataclass
@@ -96,10 +102,11 @@ class PdfParser:
     return conn
 
   def page(self, page_hash: str) -> Optional[PdfPage]:
-    self._cursor.execute("SELECT idx FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
+    self._cursor.execute("SELECT pdf_id, idx FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
     row = self._cursor.fetchone()
     if row is not None:
-      return PdfPage(self, row[0], page_hash)
+      pdf_id, index = row
+      return PdfPage(self, pdf_id, index, page_hash)
     else:
       return None
 
@@ -108,25 +115,36 @@ class PdfParser:
     row = self._cursor.fetchone()
 
     if row is None:
-      meta = self._create_and_split_pdf(hash, file_path, progress)
+      pdf_id, meta = self._create_and_split_pdf(hash, file_path, progress)
     else:
-      _, meta_json = row
+      pdf_id, meta_json = row
       meta = json.loads(meta_json)
 
     return Pdf(
       hash=hash,
       meta=meta,
-      pages=self._all_pages(hash),
+      pages=self._all_pages(pdf_id),
+    )
+
+  def _load_cached_pdf(self, pdf_id: int) -> Pdf:
+    self._cursor.execute("SELECT hash, meta FROM pdfs WHERE id = ? LIMIT 1", (pdf_id,))
+    row = self._cursor.fetchone()
+    if row is None:
+      raise ValueError(f"pdf_id {pdf_id} not found")
+
+    hash, meta_json = row
+    meta = json.loads(meta_json)
+
+    return Pdf(
+      hash=hash,
+      meta=meta,
+      pages=self._all_pages(pdf_id),
     )
 
   def pdf_has_cached(self, hash: str) -> bool:
     return self._pdf_id(hash) is not None
 
-  def _all_pages(self, pdf_hash) -> list[PdfPage]:
-    pdf_id = self._pdf_id(pdf_hash)
-    if pdf_id is None:
-      return []
-
+  def _all_pages(self, pdf_id: int) -> list[PdfPage]:
     pdf_pages: list[PdfPage] = []
     rows = self._cursor.execute(
       "SELECT idx, hash FROM pages WHERE pdf_id = ? ORDER BY idx",
@@ -134,12 +152,12 @@ class PdfParser:
     )
     for row in rows:
       index, page_hash = row
-      pdf_page = PdfPage(self, index, page_hash)
+      pdf_page = PdfPage(self, pdf_id, index, page_hash)
       pdf_pages.append(pdf_page)
 
     return pdf_pages
 
-  def _create_and_split_pdf(self, hash: str, file_path: str, progress: Optional[Progress]) -> dict:
+  def _create_and_split_pdf(self, hash: str, file_path: str, progress: Optional[Progress]) -> tuple[int, dict]:
     # TODO: read MetaData from PDF file
     meta: dict = {}
     meta_json = json.dumps(meta)
@@ -169,7 +187,7 @@ class PdfParser:
           progress.complete_handle_pdf_page(page_index, pages_count)
 
       self._conn.commit()
-      return meta
+      return pdf_id, meta
 
     except Exception as e:
       self._conn.rollback()
