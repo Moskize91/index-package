@@ -9,7 +9,7 @@ from chromadb.api import ClientAPI
 from chromadb.api.types import EmbeddingFunction, IncludeEnum, ID, Documents, Embeddings, Embeddable, Metadata, Document
 
 from .types import PdfVectorResult, PdfQueryKind
-from ..parser import PdfParser, PdfPage, PdfPageUpdatedEvent
+from ..parser import PdfParser, PdfPage
 from ..scanner import Event, EventKind, EventTarget
 from ..progress import Progress
 from ..utils import hash_sha512, ensure_parent_dir
@@ -133,27 +133,28 @@ class VectorIndex:
     if hash == origin_hash:
       return
 
-    if hash is not None:
-      self._cursor.execute("SELECT COUNT(*) FROM files WHERE hash = ?", (hash,))
-      num_rows = self._cursor.fetchone()[0]
-      if num_rows == 1:
-        parser_event = self._parser.add_file(hash, path, progress)
-        self._handle_parser_event(hash, parser_event)
+    # TODO:
+    # if hash is not None:
+    #   self._cursor.execute("SELECT COUNT(*) FROM files WHERE hash = ?", (hash,))
+    #   num_rows = self._cursor.fetchone()[0]
+    #   if num_rows == 1:
+    #     parser_event = self._parser.add_file(hash, path, progress)
+    #     self._handle_parser_event(hash, parser_event)
 
-    if origin_hash is not None:
-      self._cursor.execute("SELECT * FROM files WHERE hash = ? LIMIT 1", (origin_hash,))
-      if self._cursor.fetchone() is None:
-        parser_event = self._parser.remove_file(origin_hash)
-        self._handle_parser_event(origin_hash, parser_event)
+    # if origin_hash is not None:
+    #   self._cursor.execute("SELECT * FROM files WHERE hash = ? LIMIT 1", (origin_hash,))
+    #   if self._cursor.fetchone() is None:
+    #     parser_event = self._parser.fire_file_removed(origin_hash)
+    #     self._handle_parser_event(origin_hash, parser_event)
 
-  def _handle_parser_event(self, pdf_hash: str, event: PdfPageUpdatedEvent):
-    for hash in event.added_page_hashes:
-      page = self._parser.page(hash)
-      if page is not None:
-        self._add_page_to_index(pdf_hash, page)
+  # def _handle_parser_event(self, pdf_hash: str, event: PdfPageUpdatedEvent):
+  #   for hash in event.added_page_hashes:
+  #     page = self._parser.page(hash)
+  #     if page is not None:
+  #       self._add_page_to_index(pdf_hash, page)
 
-    for hash in event.removed_page_hashes:
-      self._remove_page_from_index(hash)
+  #   for hash in event.removed_page_hashes:
+  #     self._remove_page_from_index(hash)
 
   def _add_page_to_index(self, pdf_hash: str, page: PdfPage):
     documents: list[Document] = []

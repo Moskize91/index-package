@@ -8,6 +8,7 @@
     "annots",
     "chromadb",
     "Embeddable",
+    "lastrowid",
     "metadatas",
     "ndarray",
     "pdfplumber",

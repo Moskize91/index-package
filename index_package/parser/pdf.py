@@ -1,19 +1,15 @@
 import os
+import json
 import shutil
 import sqlite3
 import pikepdf
 
-from typing import cast, Optional
+from typing import cast, Optional, Callable
 from dataclasses import dataclass
 
 from .pdf_extractor import PdfExtractor, Annotation
 from ..progress import Progress
 from ..utils import hash_sha512, ensure_parent_dir, TempFolderHub
-
-@dataclass
-class PdfPageUpdatedEvent:
-  added_page_hashes: list[str]
-  removed_page_hashes: list[str]
 
 class PdfPage:
   def __init__(self, parent, index: int, hash: str):
@@ -24,7 +20,7 @@ class PdfPage:
     self._snapshot: Optional[str] = None
 
   @property
-  def pdf_path(self) -> str:
+  def page_file_path(self) -> str:
     return os.path.join(self._parent._pages_path, f"{self.hash}.pdf")
 
   @property
@@ -41,15 +37,27 @@ class PdfPage:
       self._snapshot = extractor.read_snapshot(self.hash)
     return self._snapshot
 
-# https://pikepdf.readthedocs.io/en/latest/
+@dataclass
+class Pdf:
+  hash: str
+  meta: dict[str, str]
+  pages: list[PdfPage]
+
+# it's just for test unit now.
+@dataclass
+class PdfParserListeners:
+  on_page_added: Callable[[str], None] = lambda _: None
+  on_page_removed: Callable[[str], None] = lambda _: None
+
 class PdfParser:
-  def __init__(self, cache_path: str, temp_path: str) -> None:
+  def __init__(self, cache_path: str, temp_path: str, listeners: PdfParserListeners = PdfParserListeners()) -> None:
     db_path = ensure_parent_dir(os.path.join(cache_path, "pages.sqlite3"))
     self._pages_path: str = os.path.join(cache_path, "pages")
     self._temp_folders: TempFolderHub = TempFolderHub(temp_path)
     self._conn: sqlite3.Connection = self._connect(db_path)
     self._cursor: sqlite3.Cursor = self._conn.cursor()
     self._extractor: PdfExtractor = PdfExtractor(self._pages_path)
+    self._listeners: PdfParserListeners = listeners
 
     if not os.path.exists(self._pages_path):
       os.makedirs(self._pages_path, exist_ok=True)
@@ -62,90 +70,141 @@ class PdfParser:
     if is_first_time:
       cursor = conn.cursor()
       cursor.execute("""
-        CREATE TABLE pages (
+        CREATE TABLE pdfs (
           id INTEGER PRIMARY KEY,
-          pdf_hash TEXT NOT NULL,
-          page_index TEXT NOT NULL,
-          page_hash TEXT NOT NULL
+          hash TEXT NOT NULL,
+          meta TEXT NOT NULL
         )
       """)
       cursor.execute("""
-        CREATE UNIQUE INDEX idx_pdf_pages ON pages (pdf_hash, page_index)
+        CREATE TABLE pages (
+          id INTEGER PRIMARY KEY,
+          pdf_id TEXT NOT NULL,
+          hash TEXT NOT NULL,
+          idx TEXT NOT NULL
+        )
       """)
       cursor.execute("""
-        CREATE INDEX idx_page_pages ON pages (page_hash)
+        CREATE INDEX idx_pdfs ON pdfs (hash)
+      """)
+      cursor.execute("""
+        CREATE UNIQUE INDEX idx_pages ON pages (pdf_id, idx)
       """)
       conn.commit()
       cursor.close()
 
     return conn
 
-  def pages(self, pdf_hash: str) -> list[PdfPage]:
-    pdf_pages: list[PdfPage] = []
-    for i, page_hash in enumerate(self._select_page_hashes(pdf_hash)):
-      pdf_page = PdfPage(self, i, page_hash)
-      pdf_pages.append(pdf_page)
-    return pdf_pages
-
   def page(self, page_hash: str) -> Optional[PdfPage]:
-    self._cursor.execute("SELECT page_index FROM pages WHERE page_hash = ? LIMIT 1", (page_hash,))
+    self._cursor.execute("SELECT idx FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
     row = self._cursor.fetchone()
     if row is not None:
       return PdfPage(self, row[0], page_hash)
     else:
       return None
 
-  def add_file(self, hash: str, file_path: str, progress: Progress = Progress()) -> PdfPageUpdatedEvent:
-    origin_page_hashes = self._select_page_hashes(hash) # logically no, but for compatibility
-    new_page_hashes = self._extract_page_hashes(file_path)
-    added_page_hashes, removed_page_hashes = self._commit_pages_updating(origin_page_hashes, new_page_hashes, hash)
-    added_pages_count = len(added_page_hashes)
+  def pdf(self, hash: str, file_path: str, progress: Optional[Progress] = None) -> Pdf:
+    self._cursor.execute("SELECT id, meta FROM pdfs WHERE hash = ? LIMIT 1", (hash,))
+    row = self._cursor.fetchone()
 
-    for i, page_hash in enumerate(added_page_hashes):
-      self._extractor.extract_page(page_hash)
-      progress.complete_handle_pdf_page(i + 1, added_pages_count)
+    if row is None:
+      meta = self._create_and_split_pdf(hash, file_path, progress)
+    else:
+      _, meta_json = row
+      meta = json.loads(meta_json)
 
-    for page_hash in removed_page_hashes:
-      self._extractor.remove_page(page_hash)
-
-    return PdfPageUpdatedEvent(
-      added_page_hashes,
-      removed_page_hashes,
+    return Pdf(
+      hash=hash,
+      meta=meta,
+      pages=self._all_pages(hash),
     )
 
-  def remove_file(self, hash: str) -> PdfPageUpdatedEvent:
-    page_hashes = self._select_page_hashes(hash)
+  def pdf_has_cached(self, hash: str) -> bool:
+    return self._pdf_id(hash) is not None
+
+  def _all_pages(self, pdf_hash) -> list[PdfPage]:
+    pdf_id = self._pdf_id(pdf_hash)
+    if pdf_id is None:
+      return []
+
+    pdf_pages: list[PdfPage] = []
+    rows = self._cursor.execute(
+      "SELECT idx, hash FROM pages WHERE pdf_id = ? ORDER BY idx",
+      (pdf_id,),
+    )
+    for row in rows:
+      index, page_hash = row
+      pdf_page = PdfPage(self, index, page_hash)
+      pdf_pages.append(pdf_page)
+
+    return pdf_pages
+
+  def _create_and_split_pdf(self, hash: str, file_path: str, progress: Optional[Progress]) -> dict:
+    # TODO: read MetaData from PDF file
+    meta: dict = {}
+    meta_json = json.dumps(meta)
     try:
       self._cursor.execute("BEGIN TRANSACTION")
-      self._cursor.execute("DELETE FROM pages WHERE pdf_hash = ?", (hash,))
+      self._cursor.execute("INSERT INTO pdfs (hash, meta) VALUES (?, ?)", (hash, meta_json))
+      pdf_id = cast(int, self._cursor.lastrowid)
+
+      added_page_hashes: list[str] = []
+
+      for index, page_hash in enumerate(self._extract_page_hashes(file_path)):
+        self._cursor.execute(
+          "INSERT INTO pages (pdf_id, hash, idx) VALUES (?, ?, ?)",
+          (pdf_id, page_hash, index),
+        )
+        self._cursor.execute("SELECT COUNT(*) FROM pages WHERE hash = ?", (page_hash,))
+        num_rows = self._cursor.fetchone()[0]
+        if num_rows == 1:
+          added_page_hashes.append(page_hash)
+
+      for i, page_hash in enumerate(added_page_hashes):
+        self._extractor.extract_page(page_hash)
+        self._listeners.on_page_added(page_hash)
+        if progress is not None:
+          page_index = i + 1 # for human readable (not from 0)
+          pages_count = len(added_page_hashes)
+          progress.complete_handle_pdf_page(page_index, pages_count)
+
+      self._conn.commit()
+      return meta
+
+    except Exception as e:
+      self._conn.rollback()
+      raise e
+
+  # to clean useless cache files
+  def fire_file_removed(self, hash: str):
+    pdf_id = self._pdf_id(hash)
+    if pdf_id is None:
+      return
+
+    rows = self._cursor.execute(
+      "SELECT hash FROM pages WHERE pdf_id = ? ORDER BY idx",
+      (pdf_id,),
+    )
+    page_hashes: list[str] = [row[0] for row in rows]
+    removed_page_hashes: list[str] = []
+
+    try:
+      self._cursor.execute("BEGIN TRANSACTION")
+      self._cursor.execute("DELETE FROM pdfs WHERE id = ?", (pdf_id,))
+      self._cursor.execute("DELETE FROM pages WHERE pdf_id = ?", (pdf_id,))
       self._conn.commit()
     except Exception as e:
       self._conn.rollback()
       raise e
 
-    removed_page_hashes: list[str] = []
     for page_hash in page_hashes:
-      self._cursor.execute("SELECT * FROM pages WHERE page_hash = ?", (page_hash,))
+      self._cursor.execute("SELECT id FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
       if self._cursor.fetchone() is None:
         removed_page_hashes.append(page_hash)
 
     for page_hash in removed_page_hashes:
       self._extractor.remove_page(page_hash)
-
-    return PdfPageUpdatedEvent([], removed_page_hashes)
-
-  def _select_page_hashes(self, hash: str) -> list[str]:
-    self._cursor.execute(
-      "SELECT page_index, page_hash FROM pages WHERE pdf_hash = ? ORDER BY page_index",
-      (hash,),
-    )
-    page_hash_list: list[str] = []
-
-    for row in self._cursor.fetchall():
-      _, page_hash = row
-      page_hash_list.append(page_hash)
-
-    return page_hash_list
+      self._listeners.on_page_removed(page_hash)
 
   def _extract_page_hashes(self, file_path: str) -> list[str]:
     page_hashes: list[str] = []
@@ -154,6 +213,7 @@ class PdfParser:
       folder_path = folder.path
       pages_count: int = 0
 
+      # https://pikepdf.readthedocs.io/en/latest/
       with pikepdf.Pdf.open(file_path) as pdf_file:
         for i, page in enumerate(pdf_file.pages):
           page_file = pikepdf.Pdf.new()
@@ -180,48 +240,10 @@ class PdfParser:
 
     return page_hashes
 
-  def _commit_pages_updating(
-    self,
-    origin_page_hashes: list[str],
-    new_page_hashes: list[str],
-    pdf_hash: str,
-  ) -> tuple[list[str], list[str]]:
-
-    to_remove_hashes = set(origin_page_hashes)
-    to_add_hashes = set(new_page_hashes)
-
-    for hash in new_page_hashes:
-      to_remove_hashes.discard(hash)
-
-    for hash in origin_page_hashes:
-      to_add_hashes.discard(hash)
-
-    try:
-      self._cursor.execute("BEGIN TRANSACTION")
-      self._cursor.execute("DELETE FROM pages WHERE pdf_hash = ?", (pdf_hash,))
-
-      for i, page_hash in enumerate(new_page_hashes):
-        self._cursor.execute(
-          "INSERT INTO pages (pdf_hash, page_index, page_hash) VALUES (?, ?, ?)",
-          (pdf_hash, i, page_hash),
-        )
-      removed_hashes: list[str] = []
-      added_hashes: list[str] = []
-
-      for to_remove_hash in to_remove_hashes:
-        self._cursor.execute("SELECT * FROM pages WHERE page_hash = ? LIMIT 1", (to_remove_hash,))
-        if self._cursor.fetchone() is None:
-          removed_hashes.append(to_remove_hash)
-
-      for to_add_hash in to_add_hashes:
-        self._cursor.execute("SELECT COUNT(*) FROM pages WHERE page_hash = ?", (to_add_hash,))
-        num_rows = self._cursor.fetchone()[0]
-        if num_rows == 1:
-          added_hashes.append(to_add_hash)
-
-      self._conn.commit()
-      return added_hashes, removed_hashes
-
-    except Exception as e:
-      self._conn.rollback()
-      raise e
+  def _pdf_id(self, hash: str) -> Optional[int]:
+    self._cursor.execute("SELECT id FROM pdfs WHERE hash = ? LIMIT 1", (hash,))
+    row = self._cursor.fetchone()
+    if row is None:
+      return None
+    else:
+      return row[0]
