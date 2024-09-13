@@ -55,6 +55,20 @@ class Index:
 
     return conn
 
+  def get_paths(self, file_hash: str) -> list[str]:
+    self._cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (file_hash,))
+    paths: list[str] = []
+
+    for row in self._cursor.fetchall():
+      scope, path = row
+      scope_path = self._sources.get(scope, None)
+      if scope_path is not None:
+        path = os.path.join(scope_path, path)
+        path = os.path.abspath(path)
+        paths.append(path)
+
+    return paths
+
   def handle_event(self, event: Event, progress: Optional[Progress] = None):
     path = self._filter_and_get_abspath(event)
     if path is None:

@@ -22,15 +22,16 @@ class Service:
       ),
       sources=self._sources,
     )
-    self._index = Index(
-      pdf_parser=PdfParser(
-        cache_dir_path=ensure_dir(
-          os.path.abspath(os.path.join(workspace_path, "parser", "pdf_cache")),
-        ),
-        temp_dir_path=ensure_dir(
-          os.path.abspath(os.path.join(workspace_path, "temp")),
-        ),
+    self._pdf_parser: PdfParser = PdfParser(
+      cache_dir_path=ensure_dir(
+        os.path.abspath(os.path.join(workspace_path, "parser", "pdf_cache")),
       ),
+      temp_dir_path=ensure_dir(
+        os.path.abspath(os.path.join(workspace_path, "temp")),
+      ),
+    )
+    self._index: Index = Index(
+      pdf_parser=self._pdf_parser,
       index_dir_path=ensure_dir(
         os.path.abspath(os.path.join(workspace_path, "indexes")),
       ),
@@ -62,3 +63,12 @@ class Service:
       text: str = texts
 
     return self._index.query(text, results_limit)["vector"]
+
+  def get_paths(self, file_hash: str) -> list[str]:
+    return self._index.get_paths(file_hash)
+
+  def page_content(self, pdf_hash: str, page_index: int) -> str:
+    pdf = self._pdf_parser.pdf_or_none(pdf_hash)
+    if pdf is None:
+      return ""
+    return pdf.pages[page_index].snapshot

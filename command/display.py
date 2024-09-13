@@ -1,31 +1,34 @@
-from index_package import Service, PdfVectorResult, PdfQueryKind
+from index_package import Service, PdfQueryKind, PdfQueryItem
 
 
-def show_results(text: list[str], service: Service, results: list[PdfVectorResult]):
+def show_items(text: list[str], service: Service, items: list[PdfQueryItem]):
   # command will see the bottom item first
-  results.reverse()
+  items.reverse()
 
-  for result in results:
+  for item in items:
     print("========================================")
-    if result.kind == PdfQueryKind.page:
-      print(f"PDF page at page {result.index + 1}")
-    elif result.kind == PdfQueryKind.annotation_content:
-      print(f"Annotation Content")
-    elif result.kind == PdfQueryKind.annotation_extracted:
-      print(f"Annotation Extracted Text")
-    print(f"Distance: {result.distance}")
+    if item.kind == PdfQueryKind.pdf:
+      print(f"PDF Metadata")
+    elif item.kind == PdfQueryKind.page:
+      print(f"PDF page at page {item.page_index + 1}")
+    elif item.kind == PdfQueryKind.anno_content:
+      print(f"Annotation Content at Page {item.page_index + 1}")
+    elif item.kind == PdfQueryKind.anno_extracted:
+      print(f"Annotation Extracted Text at Page {item.page_index + 1}")
+    print(f"Rank: {item.rank}")
 
-    files = service.files(result.pdf_hash)
+    files = service.get_paths(item.pdf_hash)
+
     if len(files) > 0:
       print("Files:")
       for file in files:
         print(f"  {file}")
 
     print("----------------------------------------")
-    print(result.text)
+    print(service.page_content(item.pdf_hash, item.page_index))
     print("")
 
   query_text = ", ".join(text)
 
   print(f"Query: {query_text}")
-  print(f"Found {len(results)} results")
+  print(f"Found {len(items)} results")

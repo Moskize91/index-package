@@ -139,6 +139,13 @@ class PdfParser:
       pages=self._all_pages(pdf_id),
     )
 
+  def pdf_or_none(self, hash: str) -> Optional[Pdf]:
+    pdf_id = self._pdf_id(hash)
+    if pdf_id is None:
+      return None
+    else:
+      return self._load_cached_pdf(pdf_id)
+
   def _load_cached_pdf(self, pdf_id: int) -> Pdf:
     self._cursor.execute("SELECT hash, meta FROM pdfs WHERE id = ? LIMIT 1", (pdf_id,))
     row = self._cursor.fetchone()
