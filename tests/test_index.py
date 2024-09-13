@@ -12,8 +12,8 @@ class TestPdfParser(unittest.TestCase):
   def test_struct_and_destruct_pdf(self):
     segmentation = Segmentation()
     parser = PdfParser(
-      cache_path=get_temp_path("index/parser_cache"),
-      temp_path=get_temp_path("index/temp"),
+      cache_dir_path=get_temp_path("index/parser_cache"),
+      temp_dir_path=get_temp_path("index/temp"),
     )
     vector_db = VectorDB(
       index_dir_path=get_temp_path("index/vector_db"),

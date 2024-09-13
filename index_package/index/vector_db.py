@@ -6,14 +6,11 @@ from chromadb.api import ClientAPI
 from chromadb.api.types import EmbeddingFunction, ID, Documents, Embeddings, Document
 
 from .abc_db import IndexDB, IndexItem
-from ..utils import ensure_parent_dir
 
 class VectorDB(IndexDB):
   def __init__(self, index_dir_path: str, embedding_model_id: str) -> None:
     super().__init__("vector")
-    self._chromadb: ClientAPI = PersistentClient(
-      path=ensure_parent_dir(index_dir_path)
-    )
+    self._chromadb: ClientAPI = PersistentClient(path=index_dir_path)
     self._pdfs_db = self._chromadb.get_or_create_collection(
       name="pdfs",
       embedding_function=_EmbeddingFunction(embedding_model_id),
