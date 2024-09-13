@@ -47,4 +47,4 @@ class TestPdfParser(unittest.TestCase):
     self.assertEquals(item.page_index, 2)
     self.assertEquals(item.anno_index, 0)
     self.assertEquals(item.segment_start, 0)
-    self.assertEquals(item.segment_end, 1) # TODO: 这是错的，需要修复
+    self.assertEquals(item.segment_end, len("Identification"))

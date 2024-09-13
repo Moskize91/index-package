@@ -63,7 +63,7 @@ class Index:
       scope, path = row
       scope_path = self._sources.get(scope, None)
       if scope_path is not None:
-        path = os.path.join(scope_path, path)
+        path = os.path.join(scope_path, f".{path}")
         path = os.path.abspath(path)
         paths.append(path)
 
