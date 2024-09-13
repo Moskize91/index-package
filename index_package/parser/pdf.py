@@ -54,6 +54,32 @@ class PdfParser:
     if not os.path.exists(self._pages_path):
       os.makedirs(self._pages_path, exist_ok=True)
 
+  def _connect(self, db_path: str) -> sqlite3.Connection:
+    is_first_time = not os.path.exists(db_path)
+    conn = sqlite3.connect(db_path)
+    os.path.getmtime(db_path)
+
+    if is_first_time:
+      cursor = conn.cursor()
+      cursor.execute("""
+        CREATE TABLE pages (
+          id INTEGER PRIMARY KEY,
+          pdf_hash TEXT NOT NULL,
+          page_index TEXT NOT NULL,
+          page_hash TEXT NOT NULL
+        )
+      """)
+      cursor.execute("""
+        CREATE UNIQUE INDEX idx_pdf_pages ON pages (pdf_hash, page_index)
+      """)
+      cursor.execute("""
+        CREATE INDEX idx_page_pages ON pages (page_hash)
+      """)
+      conn.commit()
+      cursor.close()
+
+    return conn
+
   def pages(self, pdf_hash: str) -> list[PdfPage]:
     pdf_pages: list[PdfPage] = []
     for i, page_hash in enumerate(self._select_page_hashes(pdf_hash)):
@@ -72,7 +98,7 @@ class PdfParser:
   def add_file(self, hash: str, file_path: str, progress: Progress = Progress()) -> PdfPageUpdatedEvent:
     origin_page_hashes = self._select_page_hashes(hash) # logically no, but for compatibility
     new_page_hashes = self._extract_page_hashes(file_path)
-    added_page_hashes, removed_page_hashes = self._update_db(origin_page_hashes, new_page_hashes, hash)
+    added_page_hashes, removed_page_hashes = self._commit_pages_updating(origin_page_hashes, new_page_hashes, hash)
     added_pages_count = len(added_page_hashes)
 
     for i, page_hash in enumerate(added_page_hashes):
@@ -154,7 +180,7 @@ class PdfParser:
 
     return page_hashes
 
-  def _update_db(
+  def _commit_pages_updating(
     self,
     origin_page_hashes: list[str],
     new_page_hashes: list[str],
@@ -199,29 +225,3 @@ class PdfParser:
     except Exception as e:
       self._conn.rollback()
       raise e
-
-  def _connect(self, db_path: str) -> sqlite3.Connection:
-    is_first_time = not os.path.exists(db_path)
-    conn = sqlite3.connect(db_path)
-    os.path.getmtime(db_path)
-
-    if is_first_time:
-      cursor = conn.cursor()
-      cursor.execute("""
-        CREATE TABLE pages (
-          id INTEGER PRIMARY KEY,
-          pdf_hash TEXT NOT NULL,
-          page_index TEXT NOT NULL,
-          page_hash TEXT NOT NULL
-        )
-      """)
-      cursor.execute("""
-        CREATE UNIQUE INDEX idx_pdf_pages ON pages (pdf_hash, page_index)
-      """)
-      cursor.execute("""
-        CREATE INDEX idx_page_pages ON pages (page_hash)
-      """)
-      conn.commit()
-      cursor.close()
-
-    return conn
