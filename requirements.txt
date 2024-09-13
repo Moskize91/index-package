@@ -1,5 +1,7 @@
 argparse==1.4.0
 tqdm==4.66.5
+spacy==3.8.0
+langid==1.1.6
 chromadb==0.5.5
 pikepdf==9.2.1
 pdfplumber==0.11.4

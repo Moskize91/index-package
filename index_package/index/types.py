@@ -2,15 +2,17 @@ from dataclasses import dataclass
 from enum import Enum
 
 class PdfQueryKind(Enum):
-  page = 1
-  annotation_content = 2
-  annotation_extracted = 3
+  pdf = 1
+  page = 2
+  anno_content = 3
+  anno_extracted = 4
 
 @dataclass
-class PdfVectorResult:
+class PdfQueryItem:
   kind: PdfQueryKind
-  page_hash: str
   pdf_hash: str
-  index: int
-  text: str
-  distance: float
+  page_index: int
+  anno_index: int
+  segment_start: int
+  segment_end: int
+  rank: float

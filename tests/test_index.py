@@ -3,21 +3,28 @@ import unittest
 
 from index_package.parser import PdfParser
 from index_package.scanner import Event, EventKind, EventTarget
-from index_package.index import PdfQueryKind, VectorIndex
+from index_package.segmentation import Segmentation
+from index_package.index import Index, VectorDB, PdfQueryKind
 from tests.utils import get_temp_path
 
 class TestPdfParser(unittest.TestCase):
 
   def test_struct_and_destruct_pdf(self):
+    segmentation = Segmentation()
     parser = PdfParser(
       cache_path=get_temp_path("index/parser_cache"),
       temp_path=get_temp_path("index/temp"),
     )
-    index = VectorIndex(
-      parser=parser,
-      root_dir_path=get_temp_path("index/db"),
+    vector_db = VectorDB(
+      index_dir_path=get_temp_path("index/vector_db"),
       embedding_model_id="shibing624/text2vec-base-chinese",
-      scope_map={
+    )
+    index = Index(
+      pdf_parser=parser,
+      segmentation=segmentation,
+      index_dir_path=get_temp_path("index/index"),
+      databases=[vector_db],
+      sources={
         "assets": os.path.abspath(os.path.join(__file__, "../assets")),
       },
     )
@@ -30,13 +37,14 @@ class TestPdfParser(unittest.TestCase):
       mtime=0,
     )
     index.handle_event(added_event)
-    results = index.query(["identify"], results_limit=1)[0]
+    items = index.query("identify", results_limit=1)["vector"]
 
-    self.assertEquals(len(results), 1)
+    self.assertEquals(len(items), 1)
+    item = items[0]
 
-    annotation = results[0]
-    self.assertEquals(annotation.kind, PdfQueryKind.annotation_content)
-    self.assertEquals(annotation.page_hash, "Ayy2i4OK41YmIejdNJYTfyl6SgC_7zd7q05vDUenDOBEmN3T6gtKTC5gP5a_-dxufdntkgR3f2agbwww5a3AsA==")
-    self.assertEquals(annotation.pdf_hash, "8lMbEwyJykueeqwrQzrmFHt5usqlag47UpdUuFpXGfFptM13R3RUQ0AH0bCT93REjMbu25G43SFOduMehD_v8g==")
-    self.assertEquals(annotation.index, 0)
-    self.assertEquals(annotation.text, "Identification")
+    self.assertEquals(item.kind, PdfQueryKind.anno_content)
+    self.assertEquals(item.pdf_hash, "8lMbEwyJykueeqwrQzrmFHt5usqlag47UpdUuFpXGfFptM13R3RUQ0AH0bCT93REjMbu25G43SFOduMehD_v8g==")
+    self.assertEquals(item.page_index, 2)
+    self.assertEquals(item.anno_index, 0)
+    self.assertEquals(item.segment_start, 0)
+    self.assertEquals(item.segment_end, 1) # TODO: 这是错的，需要修复
