@@ -20,7 +20,7 @@ class Service:
       db_path=ensure_parent_dir(os.path.join(workspace_path, "scanner.sqlite3")),
       sources=self._sources,
     )
-    # TODO:
+    # TODO: 连接新的 index API 并恢复功能
     # self._index: VectorIndex = VectorIndex(
     #   root_dir_path=os.path.join(workspace_path, "indexes"),
     #   scope_map=self._sources,
