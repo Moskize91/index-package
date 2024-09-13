@@ -23,7 +23,7 @@ class Segmentation:
       "zh": "zh_core_web_sm",
     }
 
-  def split(self, text: str):
+  def split(self, text: str) -> list[Segment]:
     lan, _ = langid.classify(text)
     nlp = self._nlp(lan)
     doc = nlp(text)
@@ -34,8 +34,7 @@ class Segmentation:
       threshold=0.8,
       sentences=sentences,
     )
-    for segment in segments:
-      print(segment.text)
+    return segments
 
   def to_keywords(self, text: str) -> list[str]:
     lan, _ = langid.classify(text)

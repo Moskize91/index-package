@@ -101,6 +101,10 @@ class PdfParser:
 
     return conn
 
+  @property
+  def name(self) -> str:
+    return "pdf"
+
   def page(self, page_hash: str) -> Optional[PdfPage]:
     self._cursor.execute("SELECT pdf_id, idx FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
     row = self._cursor.fetchone()
