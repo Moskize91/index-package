@@ -3,21 +3,28 @@ import unittest
 
 from index_package.parser import PdfParser
 from index_package.scanner import Event, EventKind, EventTarget
-from index_package.index import PdfQueryKind, VectorIndex
+from index_package.segmentation import Segmentation
+from index_package.index import Index, VectorDB
 from tests.utils import get_temp_path
 
 class TestPdfParser(unittest.TestCase):
 
   def test_struct_and_destruct_pdf(self):
+    segmentation = Segmentation()
     parser = PdfParser(
       cache_path=get_temp_path("index/parser_cache"),
       temp_path=get_temp_path("index/temp"),
     )
-    index = VectorIndex(
-      parser=parser,
-      root_dir_path=get_temp_path("index/db"),
+    vector_db = VectorDB(
+      index_dir_path=get_temp_path("index/vector_db"),
       embedding_model_id="shibing624/text2vec-base-chinese",
-      scope_map={
+    )
+    index = Index(
+      pdf_parser=parser,
+      segmentation=segmentation,
+      index_dir_path=get_temp_path("index/index"),
+      databases=[vector_db],
+      sources={
         "assets": os.path.abspath(os.path.join(__file__, "../assets")),
       },
     )
