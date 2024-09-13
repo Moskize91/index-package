@@ -28,12 +28,16 @@ class Segmentation:
     nlp = self._nlp(lan)
     doc = nlp(text)
     sentences = self._to_sentences(nlp, doc)
-    segments = self._group_sentences(
-      # this article say: We’ll use a value of 0.8
-      # to see: https://blandthony.medium.com/methods-for-semantic-text-segmentation-prior-to-generating-text-embeddings-vectorization-6442afdb086
-      threshold=0.8,
-      sentences=sentences,
-    )
+
+    if len(sentences) == 0:
+      segments = []
+    else:
+      segments = self._group_sentences(
+        # this article say: We’ll use a value of 0.8
+        # to see: https://blandthony.medium.com/methods-for-semantic-text-segmentation-prior-to-generating-text-embeddings-vectorization-6442afdb086
+        threshold=0.8,
+        sentences=sentences,
+      )
     return segments
 
   def to_keywords(self, text: str) -> list[str]:

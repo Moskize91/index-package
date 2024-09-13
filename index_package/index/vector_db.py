@@ -61,7 +61,7 @@ class VectorDB(IndexDB):
           id=sub_ids[j],
           document=sub_documents[j],
           metadata=sub_metadatas[j],
-          rank=sub_distances[j],
+          rank=float(sub_distances[j]),
         ))
 
     return results

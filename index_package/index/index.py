@@ -60,7 +60,7 @@ class Index:
     if path is None:
       return
 
-    self._cursor.execute("SELECT id, hash FROM files WHERE scope, path = ?", (event.scope, event.path,))
+    self._cursor.execute("SELECT id, hash FROM files WHERE scope = ? AND path = ?", (event.scope, event.path,))
     row = self._cursor.fetchone()
     new_hash: Optional[str] = None
     origin: Optional[tuple[int, str]] = None
@@ -74,7 +74,7 @@ class Index:
       new_hash = hash_sha512(path)
       if origin is None:
         self._cursor.execute(
-          "INSERT INTO files (type, scope, path, hash) VALUES (?, ?, ?)",
+          "INSERT INTO files (type, scope, path, hash) VALUES (?, ?, ?, ?)",
           ("pdf", event.scope, event.path, new_hash),
         )
         self._conn.commit()
@@ -174,7 +174,7 @@ class Index:
       buffer.write("\n")
     return buffer.getvalue()
 
-  def query(self, query_text, results_limit: Optional[int] = None) -> dict[str, list[PdfQueryItem]]:
+  def query(self, query_text: str, results_limit: Optional[int] = None) -> dict[str, list[PdfQueryItem]]:
     if results_limit is None:
       results_limit = 10
 
@@ -204,8 +204,14 @@ class Index:
         if max_rank < rank:
           max_rank = rank
 
-      for result in query_results:
-        result.rank = (result.rank - min_rank) / (max_rank - min_rank)
+      rank_diff = max_rank - min_rank
+
+      if rank_diff == 0.0:
+        for result in query_results:
+          result.rank = 0.0
+      else:
+        for result in query_results:
+          result.rank = (result.rank - min_rank) / rank_diff
 
       sub_results: list[PdfQueryItem] = []
       target_results[database.name] = sub_results
@@ -233,15 +239,15 @@ class Index:
       kind = PdfQueryKind.pdf
     elif type == "pdf.page":
       kind = PdfQueryKind.page
-      page_index = item.metadata["page_index"]
+      page_index = int(item.metadata["page_index"])
     elif type == "pdf.page.anno.content":
       kind = PdfQueryKind.anno_content
-      page_index = item.metadata["page_index"]
-      anno_index = item.metadata["anno_index"]
+      page_index = int(item.metadata["page_index"])
+      anno_index = int(item.metadata["anno_index"])
     elif type == "pdf.page.anno.extracted":
       kind = PdfQueryKind.anno_extracted
-      page_index = item.metadata["page_index"]
-      anno_index = item.metadata["anno_index"]
+      page_index = int(item.metadata["page_index"])
+      anno_index = int(item.metadata["anno_index"])
     else:
       return None
 
