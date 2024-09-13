@@ -35,6 +35,6 @@ python -m venv .venv
 ### Spacy 环境安装
 
 ```shell
-# python -m spacy download en_core_web_sm
-# python -m spacy download zh_core_web_sm
+python -m spacy download en_core_web_sm
+python -m spacy download zh_core_web_sm
 ```
