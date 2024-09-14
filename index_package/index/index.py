@@ -11,7 +11,7 @@ from ..parser import PdfParser
 from ..scanner import Event, EventKind, EventTarget
 from ..segmentation import Segmentation
 from ..progress import Progress
-from ..utils import hash_sha512, ensure_parent_dir
+from ..utils import hash_sha512, ensure_parent_dir, is_empty_string
 
 class Index:
   def __init__(
@@ -194,22 +194,28 @@ class Index:
       buffer.write("\n")
     return buffer.getvalue()
 
-  def query(self, query_text: str, results_limit: Optional[int] = None) -> dict[str, list[PdfQueryItem]]:
+  def query(
+    self,
+    query_text: str,
+    results_limit: Optional[int] = None,
+    to_keywords: bool = True) -> dict[str, list[PdfQueryItem]]:
+
     if results_limit is None:
       results_limit = 10
 
-    keywords = self._segmentation.to_keywords(query_text)
+    if to_keywords:
+      keywords = self._segmentation.to_keywords(query_text)
+      query_text = " ".join(keywords)
+
     target_results: dict[str, list[PdfQueryItem]] = {}
 
-    if len(keywords) == 0:
+    if is_empty_string(query_text):
       for database in self._databases:
         target_results[database.name] = []
       return target_results
 
     for database in self._databases:
-      query_results = database.query(keywords, results_limit)
-      query_results = self._flatten_results(query_results)
-
+      query_results = database.query([query_text], results_limit)[0]
       min_rank: float = float("inf")
       max_rank: float = float("-inf")
 
@@ -242,13 +248,6 @@ class Index:
           sub_results.append(target_result)
 
     return target_results
-
-  def _flatten_results(self, results: list[list[IndexItem]]) -> list[IndexItem]:
-    items: list[IndexItem] = []
-    for result in results:
-      items.extend(result)
-    items.sort(key=lambda item: item.rank)
-    return items
 
   def _parse_item(self, item: IndexItem) -> Optional[PdfQueryItem]:
     type = item.metadata["type"]
@@ -299,7 +298,7 @@ class _WritePdf2Index:
   def write(self, type: str, text: str, properties: dict = {}):
     for segment in self._segmentation.split(text):
       segment_text = segment.text
-      if self._is_empty_string(segment_text):
+      if is_empty_string(segment_text):
         continue
       id = self._gen_id()
       metadata = properties.copy()
@@ -313,9 +312,3 @@ class _WritePdf2Index:
     id = f"{self._hash}/{self._index}"
     self._index += 1
     return id
-
-  def _is_empty_string(self, text: str):
-    for char in text:
-      if not char.isspace():
-        return False
-    return True
