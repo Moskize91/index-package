@@ -96,14 +96,17 @@ class PdfParser:
           id INTEGER PRIMARY KEY,
           pdf_id TEXT NOT NULL,
           hash TEXT NOT NULL,
-          idx TEXT NOT NULL
+          idx INTEGER NOT NULL
         )
       """)
       cursor.execute("""
         CREATE INDEX idx_pdfs ON pdfs (hash)
       """)
       cursor.execute("""
-        CREATE UNIQUE INDEX idx_pages ON pages (pdf_id, idx)
+        CREATE INDEX idx_pdf_pages ON pages (pdf_id)
+      """)
+      cursor.execute("""
+        CREATE INDEX idx__hash_pages ON pages (hash)
       """)
       conn.commit()
       cursor.close()
@@ -170,7 +173,7 @@ class PdfParser:
       "SELECT idx, hash FROM pages WHERE pdf_id = ? ORDER BY idx",
       (pdf_id,),
     )
-    for row in rows:
+    for row in rows.fetchall():
       index, page_hash = row
       pdf_page = PdfPage(self, pdf_id, index, page_hash)
       pdf_pages.append(pdf_page)

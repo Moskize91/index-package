@@ -149,7 +149,7 @@ class Index:
       type="pdf",
       text=self._pdf_meta_to_document(pdf.meta),
     )
-    for i, page in enumerate(pdf.pages):
+    for page in pdf.pages:
       writer.write(
         type="pdf.page",
         text=page.snapshot,
@@ -177,7 +177,7 @@ class Index:
             },
           )
       if progress is not None:
-        progress.on_complete_index_pdf_page(i, len(pdf.pages))
+        progress.on_complete_index_pdf_page(page.index, len(pdf.pages))
 
   def _handle_lost_hash(self, hash: str):
     for database in self._databases:
@@ -259,15 +259,15 @@ class Index:
       kind = PdfQueryKind.pdf
     elif type == "pdf.page":
       kind = PdfQueryKind.page
-      page_index = int(item.metadata["page_index"])
+      page_index = item.metadata["page_index"]
     elif type == "pdf.page.anno.content":
       kind = PdfQueryKind.anno_content
-      page_index = int(item.metadata["page_index"])
-      anno_index = int(item.metadata["anno_index"])
+      page_index = item.metadata["page_index"]
+      anno_index = item.metadata["anno_index"]
     elif type == "pdf.page.anno.extracted":
       kind = PdfQueryKind.anno_extracted
-      page_index = int(item.metadata["page_index"])
-      anno_index = int(item.metadata["anno_index"])
+      page_index = item.metadata["page_index"]
+      anno_index = item.metadata["anno_index"]
     else:
       return None
 
