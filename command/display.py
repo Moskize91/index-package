@@ -1,3 +1,6 @@
+import os
+
+from termcolor import colored
 from index_package import Service, PdfQueryKind, PdfQueryItem
 
 
@@ -6,7 +9,7 @@ def show_items(text: list[str], service: Service, items: list[PdfQueryItem]):
   items.reverse()
 
   for item in items:
-    print("========================================")
+    print(colored(_split_str("="), "dark_grey"))
     if item.kind == PdfQueryKind.pdf:
       print(f"PDF Metadata")
     elif item.kind == PdfQueryKind.page:
@@ -24,11 +27,24 @@ def show_items(text: list[str], service: Service, items: list[PdfQueryItem]):
       for file in files:
         print(f"  {file}")
 
-    print("----------------------------------------")
-    print(service.page_content(item.pdf_hash, item.page_index))
+    print(colored(_split_str("-"), "dark_grey"))
+
+    if item.kind == PdfQueryKind.page:
+      content = service.page_content(item.pdf_hash, item.page_index)
+      print(_colored_text(content, item.segment_start, item.segment_end))
+
     print("")
 
-  query_text = ", ".join(text)
+  query_text = " ".join(text)
 
   print(f"Query: {query_text}")
   print(f"Found {len(items)} results")
+
+def _split_str(char: str) -> str:
+  return os.get_terminal_size().columns * char
+
+def _colored_text(text: str, start: int, end: int) -> str:
+  prefix = colored(text[:start], "dark_grey")
+  highlight = text[start:end]
+  suffix = colored(text[end:], "dark_grey")
+  return prefix + highlight + suffix
