@@ -216,29 +216,6 @@ class Index:
 
     for database in self._databases:
       query_results = database.query([query_text], results_limit)[0]
-      min_rank: float = float("inf")
-      max_rank: float = float("-inf")
-
-      for result in query_results:
-        # 通常来说，向量数据库表示的差异（distance）以指数形式扩散
-        # 后续需要算 rank 的平均值的百分比分布，此处取对数可以平滑这个变化
-        rank = abs(result.rank)
-        rank = math.log(rank + 1.0)
-        result.rank = rank
-        if min_rank > rank:
-          min_rank = rank
-        if max_rank < rank:
-          max_rank = rank
-
-      rank_diff = max_rank - min_rank
-
-      if rank_diff == 0.0:
-        for result in query_results:
-          result.rank = 0.0
-      else:
-        for result in query_results:
-          result.rank = (result.rank - min_rank) / rank_diff
-
       sub_results: list[PdfQueryItem] = []
       target_results[database.name] = sub_results
 
