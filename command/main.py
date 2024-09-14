@@ -66,18 +66,17 @@ def main():
       listeners = _create_progress_listeners()
       service.scan(listeners)
     else:
-      text = args.text
+      text = " ".join(args.text)
       if len(text) == 0:
         print("Text not provided")
       else:
         if text is None:
           raise Exception("You can search by providing text")
-
         items = service.query(
           text=text,
           results_limit=args.limit,
         )
-        show_items(text, service, items)
+        show_items(text, items)
 
 def _package_and_path(package_path: str) -> tuple[dict, str]:
   package_path = os.path.join(os.getcwd(), package_path)

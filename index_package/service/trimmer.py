@@ -35,6 +35,7 @@ class _AnnoCollection:
 
 @dataclass
 class PageQueryItem:
+  index: int
   pdf_files: list[str]
   rank: float
   content: str
@@ -122,8 +123,8 @@ class Trimmer:
           hash=pdf_hash,
           file_paths=self._index.get_paths(pdf_hash),
         )
-        item.pdf = pdf
         self._pdfs[pdf_hash] = pdf
+      item.pdf = pdf
 
   def _count_rank_and_sort(self) -> list[_PageCollection]:
     page_collections: list[_PageCollection] = []
@@ -158,6 +159,7 @@ class Trimmer:
         continue
       item = PageQueryItem(
         pdf_files = page_collection.pdf.file_paths,
+        index=page_collection.page_index,
         rank = page_collection.rank,
         content = page.snapshot,
         contents = [],

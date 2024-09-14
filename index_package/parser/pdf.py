@@ -123,7 +123,7 @@ class PdfParser:
       return None
 
     self._cursor.execute(
-      "SELECT hash FROM pages WHERE df_id = ? AND idx = ? LIMIT 1",
+      "SELECT hash FROM pages WHERE pdf_id = ? AND idx = ? LIMIT 1",
       (pdf_id, page_index,),
     )
     row = self._cursor.fetchone()
