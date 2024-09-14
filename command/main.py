@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 from tqdm import tqdm
 from index_package import Service, ProgressListeners
-from command.display import show_results
+from command.display import show_items
 
 def main():
   parser = argparse.ArgumentParser(
@@ -73,11 +73,11 @@ def main():
         if text is None:
           raise Exception("You can search by providing text")
 
-        results = service.query(
+        items = service.query(
           texts=text,
           results_limit=args.limit,
         )
-        show_results(text, service, results)
+        show_items(text, service, items)
 
 def _package_and_path(package_path: str) -> tuple[dict, str]:
   package_path = os.path.join(os.getcwd(), package_path)
@@ -120,20 +120,32 @@ def _create_progress_listeners() -> ProgressListeners:
 
   def on_complete_handle_file(_: str):
     context.files_count += 1
+    close_progress_if_exists()
+
+  def on_complete_handle_pdf_page(page_index: int, total_pages: int):
+    if context.progress_bar is None:
+      context.progress_bar = tqdm(total=total_pages, desc=f"Parse PDF: {total_pages} pages", position=1)
+    context.progress_bar.update(1)
+    if page_index == total_pages - 1:
+      close_progress_if_exists()
+
+  def on_complete_index_pdf_page(page_index: int, total_pages: int):
+    if context.progress_bar is None:
+      context.progress_bar = tqdm(total=total_pages, desc=f"Index PDF {total_pages}: pages", position=1)
+    context.progress_bar.update(1)
+    if page_index == total_pages - 1:
+      close_progress_if_exists()
+
+  def close_progress_if_exists():
     if context.progress_bar is not None:
       context.progress_bar.close()
       context.progress_bar = None
-      print("\n")
-
-  def on_complete_handle_pdf_page(_: int, total_pages: int):
-    if context.progress_bar is None:
-      context.progress_bar = tqdm(total=total_pages, desc=f"PDF {total_pages} pages", position=1)
-    context.progress_bar.update(1)
 
   return ProgressListeners(
     on_start_scan=on_start_scan,
     on_start_handle_file=on_start_handle_file,
     on_complete_handle_pdf_page=on_complete_handle_pdf_page,
+    on_complete_index_pdf_page=on_complete_index_pdf_page,
     on_complete_handle_file=on_complete_handle_file,
   )
 

@@ -17,6 +17,7 @@
     "sents",
     "shibing",
     "spacy",
+    "termcolor",
     "tqdm",
     "uids"
   ]

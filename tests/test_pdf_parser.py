@@ -10,8 +10,8 @@ class TestPdfParser(unittest.TestCase):
   def test_struct_and_destruct_pdf(self):
     assets_path = os.path.abspath(os.path.join(__file__, "../assets"))
     parser = PdfParser(
-      cache_path=get_temp_path("pdf_struct/cache"),
-      temp_path=get_temp_path("pdf_struct/temp"),
+      cache_dir_path=get_temp_path("pdf_struct/cache"),
+      temp_dir_path=get_temp_path("pdf_struct/temp"),
       listeners=PdfParserListeners(
         on_page_added=lambda path:added_page_hashes.append(path),
         on_page_removed=lambda path:removed_page_hashes.append(path),
@@ -113,8 +113,8 @@ class TestPdfParser(unittest.TestCase):
   def test_extract_annotation(self):
     assets_path = os.path.abspath(os.path.join(__file__, "../assets"))
     parser = PdfParser(
-      cache_path=get_temp_path("pdf_extract/cache"),
-      temp_path=get_temp_path("pdf_extract/temp"),
+      cache_dir_path=get_temp_path("pdf_extract/cache"),
+      temp_dir_path=get_temp_path("pdf_extract/temp"),
       listeners=PdfParserListeners(
         on_page_added=lambda path:added_page_hashes.append(path),
         on_page_removed=lambda path:removed_page_hashes.append(path),

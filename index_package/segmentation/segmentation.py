@@ -67,8 +67,8 @@ class Segmentation:
     for sent in doc.sents:
       sentences.append((
         nlp(sent.text),
-        sent.start,
-        sent.end,
+        sent.start_char,
+        sent.end_char,
       ))
     return sentences
 

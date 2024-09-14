@@ -12,8 +12,8 @@ class TestPdfParser(unittest.TestCase):
   def test_struct_and_destruct_pdf(self):
     segmentation = Segmentation()
     parser = PdfParser(
-      cache_path=get_temp_path("index/parser_cache"),
-      temp_path=get_temp_path("index/temp"),
+      cache_dir_path=get_temp_path("index/parser_cache"),
+      temp_dir_path=get_temp_path("index/temp"),
     )
     vector_db = VectorDB(
       index_dir_path=get_temp_path("index/vector_db"),
@@ -47,4 +47,4 @@ class TestPdfParser(unittest.TestCase):
     self.assertEquals(item.page_index, 2)
     self.assertEquals(item.anno_index, 0)
     self.assertEquals(item.segment_start, 0)
-    self.assertEquals(item.segment_end, 1) # TODO: 这是错的，需要修复
+    self.assertEquals(item.segment_end, len("Identification"))

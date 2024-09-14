@@ -55,6 +55,20 @@ class Index:
 
     return conn
 
+  def get_paths(self, file_hash: str) -> list[str]:
+    self._cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (file_hash,))
+    paths: list[str] = []
+
+    for row in self._cursor.fetchall():
+      scope, path = row
+      scope_path = self._sources.get(scope, None)
+      if scope_path is not None:
+        path = os.path.join(scope_path, f".{path}")
+        path = os.path.abspath(path)
+        paths.append(path)
+
+    return paths
+
   def handle_event(self, event: Event, progress: Optional[Progress] = None):
     path = self._filter_and_get_abspath(event)
     if path is None:
@@ -126,7 +140,11 @@ class Index:
 
   def _handle_found_hash(self, hash: str, path: str, progress: Optional[Progress]):
     pdf = self._pdf_parser.pdf(hash, path, progress)
-    writer = _WritePdf2Index(self._segmentation, self._databases, hash)
+    writer = _WritePdf2Index(
+      hash=hash,
+      segmentation=self._segmentation,
+      databases=self._databases,
+    )
     writer.write(
       type="pdf",
       text=self._pdf_meta_to_document(pdf.meta),
@@ -158,6 +176,8 @@ class Index:
               "anno_index": index,
             },
           )
+      if progress is not None:
+        progress.on_complete_index_pdf_page(page.index, len(pdf.pages))
 
   def _handle_lost_hash(self, hash: str):
     for database in self._databases:
@@ -239,15 +259,15 @@ class Index:
       kind = PdfQueryKind.pdf
     elif type == "pdf.page":
       kind = PdfQueryKind.page
-      page_index = int(item.metadata["page_index"])
+      page_index = item.metadata["page_index"]
     elif type == "pdf.page.anno.content":
       kind = PdfQueryKind.anno_content
-      page_index = int(item.metadata["page_index"])
-      anno_index = int(item.metadata["anno_index"])
+      page_index = item.metadata["page_index"]
+      anno_index = item.metadata["anno_index"]
     elif type == "pdf.page.anno.extracted":
       kind = PdfQueryKind.anno_extracted
-      page_index = int(item.metadata["page_index"])
-      anno_index = int(item.metadata["anno_index"])
+      page_index = item.metadata["page_index"]
+      anno_index = item.metadata["anno_index"]
     else:
       return None
 
@@ -266,7 +286,11 @@ class Index:
     )
 
 class _WritePdf2Index:
-  def __init__(self, segmentation: Segmentation, databases: list[IndexDB], hash: str):
+  def __init__(self,
+    hash: str,
+    segmentation: Segmentation,
+    databases: list[IndexDB],
+  ):
     self._segmentation: Segmentation = segmentation
     self._databases: list[IndexDB] = databases
     self._hash: str = hash
@@ -274,15 +298,24 @@ class _WritePdf2Index:
 
   def write(self, type: str, text: str, properties: dict = {}):
     for segment in self._segmentation.split(text):
+      segment_text = segment.text
+      if self._is_empty_string(segment_text):
+        continue
       id = self._gen_id()
       metadata = properties.copy()
       metadata["type"] = type
       metadata["seg_start"] = segment.start
       metadata["seg_end"] = segment.end
       for database in self._databases:
-        database.save_index(id, segment.text, metadata)
+        database.save_index(id, segment_text, metadata)
 
   def _gen_id(self) -> str:
     id = f"{self._hash}/{self._index}"
     self._index += 1
     return id
+
+  def _is_empty_string(self, text: str):
+    for char in text:
+      if not char.isspace():
+        return False
+    return True

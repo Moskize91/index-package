@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from .pdf_extractor import PdfExtractor, Annotation
 from ..progress import Progress
-from ..utils import hash_sha512, ensure_parent_dir, TempFolderHub
+from ..utils import hash_sha512, TempFolderHub
 
 @dataclass
 class Pdf:
@@ -56,10 +56,19 @@ class PdfParserListeners:
   on_page_removed: Callable[[str], None] = lambda _: None
 
 class PdfParser:
-  def __init__(self, cache_path: str, temp_path: str, listeners: PdfParserListeners = PdfParserListeners()) -> None:
-    db_path = ensure_parent_dir(os.path.join(cache_path, "pages.sqlite3"))
-    self._pages_path: str = os.path.join(cache_path, "pages")
-    self._temp_folders: TempFolderHub = TempFolderHub(temp_path)
+  def __init__(
+    self,
+    cache_dir_path: str,
+    temp_dir_path: str,
+    listeners: PdfParserListeners = PdfParserListeners(),
+  ) -> None:
+    db_path = os.path.abspath(
+      os.path.join(cache_dir_path, "pages.sqlite3"),
+    )
+    self._pages_path: str = os.path.abspath(
+      os.path.join(cache_dir_path, "pages"),
+    )
+    self._temp_folders: TempFolderHub = TempFolderHub(temp_dir_path)
     self._conn: sqlite3.Connection = self._connect(db_path)
     self._cursor: sqlite3.Cursor = self._conn.cursor()
     self._extractor: PdfExtractor = PdfExtractor(self._pages_path)
@@ -87,14 +96,17 @@ class PdfParser:
           id INTEGER PRIMARY KEY,
           pdf_id TEXT NOT NULL,
           hash TEXT NOT NULL,
-          idx TEXT NOT NULL
+          idx INTEGER NOT NULL
         )
       """)
       cursor.execute("""
         CREATE INDEX idx_pdfs ON pdfs (hash)
       """)
       cursor.execute("""
-        CREATE UNIQUE INDEX idx_pages ON pages (pdf_id, idx)
+        CREATE INDEX idx_pdf_pages ON pages (pdf_id)
+      """)
+      cursor.execute("""
+        CREATE INDEX idx__hash_pages ON pages (hash)
       """)
       conn.commit()
       cursor.close()
@@ -130,6 +142,13 @@ class PdfParser:
       pages=self._all_pages(pdf_id),
     )
 
+  def pdf_or_none(self, hash: str) -> Optional[Pdf]:
+    pdf_id = self._pdf_id(hash)
+    if pdf_id is None:
+      return None
+    else:
+      return self._load_cached_pdf(pdf_id)
+
   def _load_cached_pdf(self, pdf_id: int) -> Pdf:
     self._cursor.execute("SELECT hash, meta FROM pdfs WHERE id = ? LIMIT 1", (pdf_id,))
     row = self._cursor.fetchone()
@@ -154,7 +173,7 @@ class PdfParser:
       "SELECT idx, hash FROM pages WHERE pdf_id = ? ORDER BY idx",
       (pdf_id,),
     )
-    for row in rows:
+    for row in rows.fetchall():
       index, page_hash = row
       pdf_page = PdfPage(self, pdf_id, index, page_hash)
       pdf_pages.append(pdf_page)
@@ -186,9 +205,8 @@ class PdfParser:
         self._extractor.extract_page(page_hash)
         self._listeners.on_page_added(page_hash)
         if progress is not None:
-          page_index = i + 1 # for human readable (not from 0)
           pages_count = len(added_page_hashes)
-          progress.complete_handle_pdf_page(page_index, pages_count)
+          progress.complete_handle_pdf_page(i, pages_count)
 
       self._conn.commit()
       return pdf_id, meta
