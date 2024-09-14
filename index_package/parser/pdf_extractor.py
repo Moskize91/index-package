@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 from pdfplumber.page import Page
 from shapely.geometry import Polygon
+from ..utils import is_empty_string
 
 _PDF_EXT = "pdf"
 _SNAPSHOT_EXT = "snapshot.txt"
@@ -95,7 +96,7 @@ class PdfExtractor:
           if text is not None:
             annotation.extracted_text = self._standardize_text(text)
 
-    if not self._is_all_whitespace(snapshot):
+    if not is_empty_string(snapshot):
       with open(os.path.join(self._pages_path, f"{page_hash}.{_SNAPSHOT_EXT}"), "w", encoding="utf-8") as file:
         file.write(snapshot)
 
@@ -216,9 +217,6 @@ class PdfExtractor:
         return dt_adjusted.strftime("%Y-%m-%d %H:%M:%S")
     else:
         return None
-
-  def _is_all_whitespace(self, string: str):
-    return all(c.isspace() for c in string)
 
   def _standardize_text(self, input_str: str) -> str:
     buffer = io.StringIO()

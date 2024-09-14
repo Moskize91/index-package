@@ -1,52 +1,77 @@
 import os
 
 from termcolor import colored
-from index_package import Service, PdfQueryKind, PdfQueryItem
+from index_package import Service, PageQueryItem
 
-
-def show_items(text: list[str], service: Service, items: list[PdfQueryItem]):
+def show_items(text: str, pages: list[PageQueryItem]):
   # command will see the bottom item first
-  items.reverse()
+  pages.reverse()
+  items_count = 0
 
-  for item in items:
-    print(colored(_split_str("="), "dark_grey"))
-    if item.kind == PdfQueryKind.pdf:
-      print(f"PDF Metadata")
-    elif item.kind == PdfQueryKind.page:
-      print(f"PDF page at page {item.page_index + 1}")
-    elif item.kind == PdfQueryKind.anno_content:
-      print(f"Annotation Content at Page {item.page_index + 1}")
-    elif item.kind == PdfQueryKind.anno_extracted:
-      print(f"Annotation Extracted Text at Page {item.page_index + 1}")
-
-    print(f"Rank: {item.rank}")
-    print(f"Highlight: {item.segment_start + 1} - {item.segment_end}")
-
-    files = service.get_paths(item.pdf_hash)
-
-    if len(files) > 0:
-      print("Files:")
-      for file in files:
-        print(f"  {file}")
-
+  for page in pages:
     print(colored(_split_str("-"), "dark_grey"))
+    print(f"PDF File Page at page {page.index + 1}:")
+    print(f"Rank: {page.rank}")
 
-    if item.kind == PdfQueryKind.page:
-      content = service.page_content(item.pdf_hash, item.page_index)
-      print(_colored_text(content, item.segment_start, item.segment_end))
+    if len(page.contents) > 0:
+      print(f"Found Contents: {len(page.contents)}")
 
-    print("")
+    if len(page.annotations) > 0:
+      print(f"Found Annotations: {len(page.annotations)}")
 
-  query_text = " ".join(text)
+    if len(page.pdf_files) > 0:
+      print("Files:")
+      for file in page.pdf_files:
+        file_path = colored(file, "dark_grey")
+        print(f"  {file_path}")
 
-  print(f"Query: {query_text}")
-  print(f"Found {len(items)} results")
+    if (len(page.contents) > 0):
+      print(colored(_split_str("-"), "dark_grey"))
+      items_count += len(page.contents)
+      print(_highlight_text(
+        text=page.content,
+        segments=[(c.start, c.end) for c in page.contents]
+      ))
+
+    if len(page.annotations) > 0:
+      print(colored(_split_str("-"), "dark_grey"))
+      for i, anno in enumerate(page.annotations):
+        items_count += 1
+        print(f"Annotation Index: {anno.index + 1}")
+        print(f"Rank: {anno.rank}")
+        print(_highlight_text(
+          text=anno.content,
+          segments=[(anno.start, anno.end)]
+        ))
+        if i < len(page.annotations) - 1:
+          print("")
+
+    print("\n")
+
+  print(colored(_split_str("-"), "dark_grey"))
+  print(f"Query: {text}")
+  print(f"Found {len(pages)} Pages and {items_count} Records")
+
+def _highlight_text(text: str, segments: list[tuple[int, int]]) -> str:
+  segments.sort(key=lambda x: x[0])
+
+  buffer: list[str] = []
+  latest_end: int = 0
+
+  for start, end in segments:
+    if start > latest_end:
+      background_text = text[latest_end:start]
+      buffer.append(colored(background_text, "dark_grey"))
+      latest_end = start
+    if end > start:
+      buffer.append(text[start:end])
+      latest_end = end
+
+  if latest_end < len(text):
+    background_text = text[latest_end:]
+    buffer.append(colored(background_text, "dark_grey"))
+
+  return "".join(buffer)
 
 def _split_str(char: str) -> str:
   return os.get_terminal_size().columns * char
-
-def _colored_text(text: str, start: int, end: int) -> str:
-  prefix = colored(text[:start], "dark_grey")
-  highlight = text[start:end]
-  suffix = colored(text[end:], "dark_grey")
-  return prefix + highlight + suffix
