@@ -1,10 +1,11 @@
 import os
 
-from typing import Optional, Union
+from typing import Optional
+from .trimmer import Trimmer, PageQueryItem
 from ..scanner import Scanner
 from ..parser import PdfParser
 from ..segmentation import Segmentation
-from ..index import Index, VectorDB, PdfQueryItem
+from ..index import Index, VectorDB
 from ..progress import Progress, ProgressListeners
 from ..utils import ensure_dir, ensure_parent_dir
 
@@ -56,13 +57,10 @@ class Service:
         self._index.handle_event(event, progress)
         progress.complete_handle_file(path)
 
-  def query(self, texts: Union[str, list[str]], results_limit: Optional[int]) -> list[PdfQueryItem]:
-    if isinstance(texts, list):
-      text: str = " ".join(texts)
-    else:
-      text: str = texts
-
-    return self._index.query(text, results_limit)["vector"]
+  def query(self, text: str, results_limit: Optional[int]) -> list[PageQueryItem]:
+    items = self._index.query(text, results_limit)
+    trimmer = Trimmer(self._pdf_parser, self._index, items)
+    return trimmer.do()
 
   def get_paths(self, file_hash: str) -> list[str]:
     return self._index.get_paths(file_hash)

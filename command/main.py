@@ -74,7 +74,7 @@ def main():
           raise Exception("You can search by providing text")
 
         items = service.query(
-          texts=text,
+          text=text,
           results_limit=args.limit,
         )
         show_items(text, service, items)
