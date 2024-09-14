@@ -18,7 +18,9 @@ def show_items(text: list[str], service: Service, items: list[PdfQueryItem]):
       print(f"Annotation Content at Page {item.page_index + 1}")
     elif item.kind == PdfQueryKind.anno_extracted:
       print(f"Annotation Extracted Text at Page {item.page_index + 1}")
+
     print(f"Rank: {item.rank}")
+    print(f"Highlight: {item.segment_start + 1} - {item.segment_end}")
 
     files = service.get_paths(item.pdf_hash)
 

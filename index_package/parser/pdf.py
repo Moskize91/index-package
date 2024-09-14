@@ -202,9 +202,8 @@ class PdfParser:
         self._extractor.extract_page(page_hash)
         self._listeners.on_page_added(page_hash)
         if progress is not None:
-          page_index = i + 1 # for human readable (not from 0)
           pages_count = len(added_page_hashes)
-          progress.complete_handle_pdf_page(page_index, pages_count)
+          progress.complete_handle_pdf_page(i, pages_count)
 
       self._conn.commit()
       return pdf_id, meta

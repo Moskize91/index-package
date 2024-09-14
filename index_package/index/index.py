@@ -140,12 +140,16 @@ class Index:
 
   def _handle_found_hash(self, hash: str, path: str, progress: Optional[Progress]):
     pdf = self._pdf_parser.pdf(hash, path, progress)
-    writer = _WritePdf2Index(self._segmentation, self._databases, hash)
+    writer = _WritePdf2Index(
+      hash=hash,
+      segmentation=self._segmentation,
+      databases=self._databases,
+    )
     writer.write(
       type="pdf",
       text=self._pdf_meta_to_document(pdf.meta),
     )
-    for page in pdf.pages:
+    for i, page in enumerate(pdf.pages):
       writer.write(
         type="pdf.page",
         text=page.snapshot,
@@ -172,6 +176,8 @@ class Index:
               "anno_index": index,
             },
           )
+      if progress is not None:
+        progress.on_complete_index_pdf_page(i, len(pdf.pages))
 
   def _handle_lost_hash(self, hash: str):
     for database in self._databases:
@@ -280,7 +286,11 @@ class Index:
     )
 
 class _WritePdf2Index:
-  def __init__(self, segmentation: Segmentation, databases: list[IndexDB], hash: str):
+  def __init__(self,
+    hash: str,
+    segmentation: Segmentation,
+    databases: list[IndexDB],
+  ):
     self._segmentation: Segmentation = segmentation
     self._databases: list[IndexDB] = databases
     self._hash: str = hash
