@@ -298,15 +298,24 @@ class _WritePdf2Index:
 
   def write(self, type: str, text: str, properties: dict = {}):
     for segment in self._segmentation.split(text):
+      segment_text = segment.text
+      if self._is_empty_string(segment_text):
+        continue
       id = self._gen_id()
       metadata = properties.copy()
       metadata["type"] = type
       metadata["seg_start"] = segment.start
       metadata["seg_end"] = segment.end
       for database in self._databases:
-        database.save_index(id, segment.text, metadata)
+        database.save_index(id, segment_text, metadata)
 
   def _gen_id(self) -> str:
     id = f"{self._hash}/{self._index}"
     self._index += 1
     return id
+
+  def _is_empty_string(self, text: str):
+    for char in text:
+      if not char.isspace():
+        return False
+    return True
