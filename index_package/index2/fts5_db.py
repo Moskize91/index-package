@@ -3,7 +3,7 @@ import re
 import json
 import sqlite3
 
-from typing import Callable, Generator
+from typing import Generator
 from dataclasses import dataclass
 from ..segmentation import Segment
 
@@ -58,7 +58,6 @@ class FTS5DB:
     self,
     query_text: str,
     is_or_condition: bool = False,
-    rank_relationship: Callable[[str, int], float] = lambda _1, _2: 1.0,
   ) -> Generator[FTS5Node, None, None]:
 
     query_tokens = self._split_tokens(query_text)
@@ -66,10 +65,14 @@ class FTS5DB:
       return
 
     cursor = self._conn.cursor()
-
     try:
-      splitter = " OR " if is_or_condition else " AND "
-      query = splitter.join(query_tokens)
+      query_with_and = " AND ".join(query_tokens)
+      if is_or_condition:
+        query_with_or = " OR ".join(query_tokens)
+        query = f"({query_with_or}) NOT ({query_with_and})"
+      else:
+        query = query_with_and
+
       query = f"\"content\": {query}"
       fields = "N.node_id, C.content, N.metadata, N.segments"
       sql = f"SELECT {fields} from contents C INNER JOIN nodes N ON C.rowid = N.content_id WHERE C.content MATCH ?"
@@ -83,7 +86,7 @@ class FTS5DB:
           node_id, content, metadata_json, encoded_segments = row
           metadata: dict = json.loads(metadata_json)
           segments = self._decode_segment(content, encoded_segments)
-          rank = self._calculate_rank(query_tokens, segments, rank_relationship)
+          rank = self._calculate_rank(query_tokens, segments)
           node = FTS5Node(
             id=node_id,
             metadata=metadata,
@@ -91,6 +94,7 @@ class FTS5DB:
             segments=[(s[0], s[1]) for s in segments],
           )
           yield node
+
     finally:
       cursor.close()
 
@@ -135,13 +139,32 @@ class FTS5DB:
       self._conn.rollback()
       raise e
 
-  def _calculate_rank(
-    self,
-    query_tokens: list[str],
-    segments: list[_Segment],
-    rank_relationship: Callable[[str, int], float],
-  ) -> float:
-    return 0.0
+  def _calculate_rank(self, query_tokens: list[str], segments: list[_Segment]) -> float:
+    query_tokens_len = len(query_tokens)
+    match_count_list: list[bool] = [False for _ in range(query_tokens_len)]
+    matched_segment_indexes: list[int] = []
+
+    for index, segment in enumerate(segments):
+      tokens = segment[2]
+      tokens_set = set(tokens)
+      matched_count: int = 0
+      for query_token in query_tokens:
+        if query_token in tokens_set:
+          matched_count += 1
+
+      if matched_count > 0:
+        matched_segment_indexes.append(index)
+        match_count_list[query_tokens_len - matched_count] = True
+
+    sum_rank = 0.0
+    rank = 1.0
+
+    for is_matched in match_count_list:
+      if is_matched:
+        sum_rank += rank
+      rank *= 0.35
+
+    return sum_rank
 
   def _encode_segments(self, segments: list[Segment]) -> tuple[str, list[str]]:
     encoded: list[str] = []
@@ -186,3 +209,16 @@ class FTS5DB:
         tokens.append(token)
 
     return tokens
+
+  def _weights(self, length: int, attenuation: float, mean_is_1: bool) -> list[float]:
+    weights: list[float] = []
+    weight: float = 1.0
+    rate = 1.0 - attenuation
+    for _ in range(1, length):
+      weights.append(weight)
+      weight *= rate
+    if mean_is_1:
+      sum_weight = sum(weights)
+      for i in range(len(weights)):
+        weights[i] /= sum_weight
+    return weights

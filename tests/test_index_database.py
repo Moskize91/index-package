@@ -42,12 +42,11 @@ class TestPdfParser(unittest.TestCase):
     for node in db.query("Transference analysis", is_or_condition=True):
       nodes.append(node)
 
-    self.assertEqual(len(nodes), 2)
-    self.assertEqual([n.id for n in nodes], ["id1", "id2"])
-    self.assertEqual([n.segments for n in nodes], [
-      [(0, 100), (100, 250)],
-      [(0, 100), (100, 250), (250, 350)],
-    ])
+    self.assertEqual(len(nodes), 1)
+    node = nodes[0]
+
+    self.assertEqual(node.id, "id1")
+    self.assertEqual(node.segments, [(0, 100), (100, 250)])
 
     db.remove("id2")
     nodes = []
@@ -55,13 +54,3 @@ class TestPdfParser(unittest.TestCase):
       nodes.append(node)
 
     self.assertEqual(len(nodes), 0)
-
-    nodes = []
-    for node in db.query("Transference analysis", is_or_condition=True):
-      nodes.append(node)
-
-    self.assertEqual(len(nodes), 1)
-    node = nodes[0]
-
-    self.assertEqual(node.id, "id1")
-    self.assertEqual(node.segments, [(0, 100), (100, 250)])
