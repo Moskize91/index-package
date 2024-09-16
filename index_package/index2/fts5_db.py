@@ -4,18 +4,11 @@ import json
 import sqlite3
 
 from typing import Generator
-from dataclasses import dataclass
+from .index_db import IndexNode
 from ..segmentation import Segment
 
 _Segment = tuple[int, int, list[str]]
 _INVALID_TOKENS = set(["", "NEAR", "AND", "OR", "NOT"])
-
-@dataclass
-class FTS5Node:
-  id: str
-  metadata: dict
-  rank: float
-  segments: list[tuple[int, int]]
 
 class FTS5DB:
   def __init__(self, db_path: str):
@@ -58,7 +51,7 @@ class FTS5DB:
     self,
     query_text: str,
     is_or_condition: bool = False,
-  ) -> Generator[FTS5Node, None, None]:
+  ) -> Generator[IndexNode, None, None]:
 
     query_tokens = self._split_tokens(query_text)
     if len(query_tokens) == 0:
@@ -87,7 +80,7 @@ class FTS5DB:
           metadata: dict = json.loads(metadata_json)
           segments = self._decode_segment(content, encoded_segments)
           rank = self._calculate_rank(query_tokens, segments)
-          node = FTS5Node(
+          node = IndexNode(
             id=node_id,
             metadata=metadata,
             rank=rank,
