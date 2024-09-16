@@ -80,7 +80,6 @@ class PdfParser:
   def _connect(self, db_path: str) -> sqlite3.Connection:
     is_first_time = not os.path.exists(db_path)
     conn = sqlite3.connect(db_path)
-    os.path.getmtime(db_path)
 
     if is_first_time:
       cursor = conn.cursor()
