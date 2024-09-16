@@ -5,7 +5,7 @@ from .trimmer import Trimmer, PageQueryItem
 from ..scanner import Scanner
 from ..parser import PdfParser
 from ..segmentation import Segmentation
-from ..index import Index, VectorDB
+from ..index import Index, VectorDB, FTS5DB
 from ..progress import Progress, ProgressListeners
 from ..utils import ensure_dir, ensure_parent_dir
 
@@ -31,6 +31,17 @@ class Service:
         os.path.abspath(os.path.join(workspace_path, "temp")),
       ),
     )
+    self._vector_db: VectorDB = VectorDB(
+      embedding_model_id=embedding_model_id,
+      index_dir_path=ensure_dir(
+        os.path.abspath(os.path.join(workspace_path, "vector_db")),
+      ),
+    )
+    self._fts5_db: FTS5DB = FTS5DB(
+      index_dir_path=ensure_dir(
+        os.path.abspath(os.path.join(workspace_path, "fts5_db")),
+      ),
+    )
     self._index: Index = Index(
       pdf_parser=self._pdf_parser,
       index_dir_path=ensure_dir(
@@ -38,12 +49,7 @@ class Service:
       ),
       segmentation=Segmentation(),
       sources=self._sources,
-      databases=[VectorDB(
-        embedding_model_id=embedding_model_id,
-        index_dir_path=ensure_dir(
-          os.path.abspath(os.path.join(workspace_path, "vector_db")),
-        ),
-      )],
+      databases=[self._fts5_db],
     )
 
   def scan(self, progress_listeners: ProgressListeners = ProgressListeners()):
