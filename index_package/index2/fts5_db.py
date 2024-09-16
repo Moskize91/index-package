@@ -4,7 +4,7 @@ import json
 import sqlite3
 
 from typing import Generator
-from .index_db import IndexNode
+from .types import IndexNode, IndexNodeMatching
 from ..segmentation import Segment
 
 _Segment = tuple[int, int, list[str]]
@@ -50,6 +50,7 @@ class FTS5DB:
   def query(
     self,
     query_text: str,
+    matching: IndexNodeMatching = IndexNodeMatching.Matched,
     is_or_condition: bool = False,
   ) -> Generator[IndexNode, None, None]:
 
@@ -82,6 +83,7 @@ class FTS5DB:
           rank = self._calculate_rank(query_tokens, segments)
           node = IndexNode(
             id=node_id,
+            matching=matching,
             metadata=metadata,
             rank=rank,
             segments=[(s[0], s[1]) for s in segments],

@@ -5,7 +5,7 @@ from chromadb import PersistentClient
 from chromadb.api import ClientAPI
 from chromadb.api.types import ID, EmbeddingFunction, IncludeEnum, Documents, Embeddings, Document, Metadata
 
-from .index_db import IndexNode
+from .types import IndexNode, IndexNodeMatching
 from ..segmentation.segmentation import Segment
 
 class VectorDB:
@@ -16,7 +16,12 @@ class VectorDB:
       embedding_function=_EmbeddingFunction(embedding_model_id),
     )
 
-  def query(self, query_text: str, results_limit: int) -> list[IndexNode]:
+  def query(
+    self,
+    query_text: str,
+    results_limit: int,
+    matching: IndexNodeMatching = IndexNodeMatching.Similarity,
+  ) -> list[IndexNode]:
     result = self._db.query(
       query_texts=[query_text],
       n_results=results_limit,
@@ -53,6 +58,7 @@ class VectorDB:
         continue
       nodes.append(IndexNode(
         id=node_id,
+        matching=matching,
         metadata=node_metadata,
         rank=min_distance,
         segments=node_segments,
