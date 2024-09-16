@@ -53,7 +53,7 @@ class IndexDB:
     nodes = self._vector_db.query(
       query,
       matching=IndexNodeMatching.Similarity,
-      results_limit=results_limit - len(matched_nodes) + len(part_matched_nodes),
+      results_limit=results_limit,
     )
     for node in nodes:
       if not node.id in matched_node_ids:

@@ -2,7 +2,8 @@ import os
 import unittest
 
 from index_package.segmentation import Segment
-from index_package.index2 import FTS5DB, VectorDB, IndexNode
+from index_package.index2.index_db import IndexDB
+from index_package.index2 import FTS5DB, VectorDB, IndexNode, IndexNodeMatching
 from tests.utils import get_temp_path
 
 class TestPdfParser(unittest.TestCase):
@@ -81,3 +82,53 @@ class TestPdfParser(unittest.TestCase):
     self.assertEqual(len(nodes), 1)
     node = nodes[0]
     self.assertEqual(node.id, "id1")
+
+  def test_database_query(self):
+    fts5_db = FTS5DB(
+      db_path=os.path.abspath(os.path.join(get_temp_path("index-database/database"), "db.sqlite3")),
+    )
+    vector_db = VectorDB(
+      index_dir_path=get_temp_path("index-database/database/vector"),
+      embedding_model_id="shibing624/text2vec-base-chinese"
+    )
+    db = IndexDB(
+      fts5_db=fts5_db,
+      vector_db= vector_db,
+    )
+    db.save(
+      node_id="id1",
+      segments=[Segment(start=0, end=200, text="which the technique  of  analysis  of  the  transference is appropriate")],
+      metadata={},
+    )
+    db.save(
+      node_id="id2",
+      segments=[Segment(start=0, end=200, text="most  people  would  call  this  treatment \"psychotherapy.\"")],
+      metadata={},
+    )
+    db.save(
+      node_id="id3",
+      segments=[Segment(start=0, end=200, text="the transference in the here and now are the core of the analytic work.")],
+      metadata={},
+    )
+    db.save(
+      node_id="id4",
+      segments=[Segment(start=0, end=200, text="Transference interpretations, like extratransference interpretations or indeed any behavior on the analyst’s part.")],
+      metadata={},
+    )
+    db.save(
+      node_id="id5",
+      segments=[Segment(start=0, end=200, text="the transference in the here and now are the core of the analytic work.")],
+      metadata={},
+    )
+    results: list[tuple[str, IndexNodeMatching]] = []
+
+    for node in db.query("Transference analysis", results_limit=100):
+      results.append((node.id, node.matching))
+
+    self.assertEqual(results, [
+      ("id1", IndexNodeMatching.Matched),
+      ("id3", IndexNodeMatching.MatchedPartial),
+      ("id4", IndexNodeMatching.MatchedPartial),
+      ("id5", IndexNodeMatching.MatchedPartial),
+      ("id2", IndexNodeMatching.Similarity),
+    ])
