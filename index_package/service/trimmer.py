@@ -73,7 +73,7 @@ class Trimmer:
     )
 
   def _save_items_into_page_collections(self):
-    for item in self._items["vector"]:
+    for item in self._items["fts5"]:
       kind = item.kind
       if kind == PdfQueryKind.page:
         self._page_collection(item).segments.append(
