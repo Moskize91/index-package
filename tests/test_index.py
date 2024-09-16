@@ -39,12 +39,12 @@ class TestPdfParser(unittest.TestCase):
     index.handle_event(added_event)
     items = index.query("identify", results_limit=1)["vector"]
 
-    self.assertEquals(len(items), 1)
+    self.assertEqual(len(items), 1)
     item = items[0]
 
-    self.assertEquals(item.kind, PdfQueryKind.anno_content)
-    self.assertEquals(item.pdf_hash, "8lMbEwyJykueeqwrQzrmFHt5usqlag47UpdUuFpXGfFptM13R3RUQ0AH0bCT93REjMbu25G43SFOduMehD_v8g==")
-    self.assertEquals(item.page_index, 2)
-    self.assertEquals(item.anno_index, 0)
-    self.assertEquals(item.segment_start, 0)
-    self.assertEquals(item.segment_end, len("Identification"))
+    self.assertEqual(item.kind, PdfQueryKind.anno_content)
+    self.assertEqual(item.pdf_hash, "8lMbEwyJykueeqwrQzrmFHt5usqlag47UpdUuFpXGfFptM13R3RUQ0AH0bCT93REjMbu25G43SFOduMehD_v8g==")
+    self.assertEqual(item.page_index, 2)
+    self.assertEqual(item.anno_index, 0)
+    self.assertEqual(item.segment_start, 0)
+    self.assertEqual(item.segment_end, len("Identification"))
