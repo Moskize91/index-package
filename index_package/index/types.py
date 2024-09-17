@@ -13,3 +13,9 @@ class IndexNode:
   metadata: dict
   rank: float
   segments: list[tuple[int, int]]
+
+@dataclass
+class PageRelativeToPDF:
+  pdf_hash: str
+  pdf_path: str
+  page_index: int

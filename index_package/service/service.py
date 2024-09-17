@@ -1,7 +1,7 @@
 import os
 
 from typing import Optional
-from .trimmer import Trimmer, PageQueryItem
+from .trimmer import trim_nodes, PageQueryItem
 from ..scanner import Scanner
 from ..parser import PdfParser
 from ..segmentation import Segmentation
@@ -31,25 +31,24 @@ class Service:
         os.path.abspath(os.path.join(workspace_path, "temp")),
       ),
     )
-    self._vector_db: VectorDB = VectorDB(
-      embedding_model_id=embedding_model_id,
-      index_dir_path=ensure_dir(
-        os.path.abspath(os.path.join(workspace_path, "vector_db")),
-      ),
-    )
-    self._fts5_db: FTS5DB = FTS5DB(
-      index_dir_path=ensure_dir(
-        os.path.abspath(os.path.join(workspace_path, "fts5_db")),
-      ),
-    )
     self._index: Index = Index(
       pdf_parser=self._pdf_parser,
+      fts5_db=FTS5DB(
+        db_path=ensure_parent_dir(
+          os.path.abspath(os.path.join(workspace_path, "index_fts5.sqlite3"))
+        )
+      ),
+      vector_db=VectorDB(
+        embedding_model_id=embedding_model_id,
+        index_dir_path=ensure_dir(
+          os.path.abspath(os.path.join(workspace_path, "vector_db")),
+        ),
+      ),
       index_dir_path=ensure_dir(
         os.path.abspath(os.path.join(workspace_path, "indexes")),
       ),
       segmentation=Segmentation(),
       sources=self._sources,
-      databases=[self._fts5_db],
     )
 
   def scan(self, progress_listeners: ProgressListeners = ProgressListeners()):
@@ -65,8 +64,7 @@ class Service:
 
   def query(self, text: str, results_limit: Optional[int]) -> list[PageQueryItem]:
     nodes = self._index.query(text, results_limit)
-    trimmer = Trimmer(self._pdf_parser, self._index, items)
-    return trimmer.do()
+    return trim_nodes(self._index, self._pdf_parser, nodes)
 
   def get_paths(self, file_hash: str) -> list[str]:
     return self._index.get_paths(file_hash)

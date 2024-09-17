@@ -10,7 +10,7 @@ from index_package.parser.pdf import PdfPage
 from .fts5_db import FTS5DB
 from .vector_db import VectorDB
 from .index_db import IndexDB
-from .types import IndexNode
+from .types import IndexNode, PageRelativeToPDF
 from ..parser import PdfParser
 from ..scanner import Event, EventKind, EventTarget
 from ..segmentation import Segment, Segmentation
@@ -80,13 +80,42 @@ class Index:
 
     for row in self._cursor.fetchall():
       scope, path = row
-      scope_path = self._sources.get(scope, None)
+      scope_path = self._get_abs_path(scope, path)
       if scope_path is not None:
-        path = os.path.join(scope_path, f".{path}")
-        path = os.path.abspath(path)
-        paths.append(path)
+        paths.append(scope_path)
 
     return paths
+
+  def get_page_relative_to_pdf(self, page_hash: str) -> list[PageRelativeToPDF]:
+    self._cursor.execute("SELECT pdf_hash, page_index FROM pages WHERE hash = ?", (page_hash,))
+    page_infos: list[tuple[str, int]] = []
+    pages: list[PageRelativeToPDF] = []
+
+    for row in self._cursor.fetchall():
+      pdf_hash, page_index = row
+      page_infos.append((pdf_hash, page_index))
+
+    for pdf_hash, page_index in page_infos:
+      self._cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (pdf_hash,))
+      for row in self._cursor.fetchall():
+        scope, path = row
+        scope_path = self._get_abs_path(scope, path)
+        if scope_path is not None:
+          pages.append(PageRelativeToPDF(
+            pdf_hash=pdf_hash,
+            pdf_path=scope_path,
+            page_index=page_index,
+          ))
+
+    return pages
+
+  def _get_abs_path(self, scope: str, path: str) -> Optional[str]:
+    scope_path = self._sources.get(scope, None)
+    if scope_path is None:
+      return None
+    path = os.path.join(scope_path, f".{path}")
+    path = os.path.abspath(path)
+    return path
 
   def query(
     self,
@@ -208,7 +237,7 @@ class Index:
     for page_hash in page_hashes:
       self._cursor.execute("SELECT * FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
       if self._cursor.fetchone() is None:
-        page = self._pdf_parser.page_with_hash(page_hash)
+        page = self._pdf_parser.page(page_hash)
         if page is not None:
           self._handle_lost_page_hash(page)
 
