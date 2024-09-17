@@ -63,7 +63,7 @@ class Service:
         progress.complete_handle_file(path)
 
   def query(self, text: str, results_limit: Optional[int]) -> list[PageQueryItem]:
-    nodes = self._index.query(text, results_limit)
+    nodes, _ = self._index.query(text, results_limit)
     return trim_nodes(self._index, self._pdf_parser, nodes)
 
   def get_paths(self, file_hash: str) -> list[str]:

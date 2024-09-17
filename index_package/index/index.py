@@ -121,7 +121,7 @@ class Index:
     self,
     query_text: str,
     results_limit: Optional[int] = None,
-    to_keywords: bool = True) -> list[IndexNode]:
+    to_keywords: bool = True) -> tuple[list[IndexNode], list[str]]:
 
     if results_limit is None:
       results_limit = 10
@@ -129,11 +129,15 @@ class Index:
     if to_keywords:
       keywords = self._segmentation.to_keywords(query_text)
       query_text = " ".join(keywords)
+    else:
+      keywords = [query_text]
 
     if is_empty_string(query_text):
-      return []
+      query_nodes = []
+    else:
+      query_nodes = self._index_proxy.query(query_text, results_limit)
 
-    return self._index_proxy.query(query_text, results_limit)
+    return query_nodes, keywords
 
   def handle_event(self, event: Event, progress: Optional[Progress] = None):
     path = self._filter_and_get_abspath(event)
