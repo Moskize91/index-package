@@ -44,7 +44,7 @@ class IndexDB:
     for node in generator:
       matched_node_ids.add(node.id)
       part_matched_nodes.append(node)
-      if len(matched_nodes) >= results_limit:
+      if len(matched_nodes) + len(part_matched_nodes) >= results_limit:
         part_matched_nodes.sort(key=lambda node: -node.rank)
         return matched_nodes + part_matched_nodes
 
