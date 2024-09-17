@@ -10,11 +10,18 @@ def show_items(text: str, pages: list[PageQueryItem]):
 
   for page in pages:
     print(colored(_split_str("-"), "dark_grey"))
-    print(f"PDF File Page at page {page.index + 1}:")
-    print(f"Rank: {page.rank}")
+    if len(page.pdf_files) == 0:
+      pdf_file = page.pdf_files[0]
+      pdf_file_path = colored(pdf_file.pdf_path, "dark_grey")
+      print(f"PDF File page pat page {pdf_file.page_index + 1}: {pdf_file_path}")
+    else:
+      print("PDF File page from:")
+      for pdf_file in page.pdf_files:
+        file_path = colored(pdf_file.pdf_path, "dark_grey")
+        print(f"  page {pdf_file.page_index + 1} from {file_path}")
 
-    if len(page.contents) > 0:
-      print(f"Found Contents: {len(page.contents)}")
+    if len(page.segments) > 0:
+      print(f"Found Contents: {len(page.segments)}")
 
     if len(page.annotations) > 0:
       print(f"Found Annotations: {len(page.annotations)}")
@@ -25,12 +32,12 @@ def show_items(text: str, pages: list[PageQueryItem]):
         file_path = colored(file, "dark_grey")
         print(f"  {file_path}")
 
-    if (len(page.contents) > 0):
+    if len(page.segments) > 0:
       print(colored(_split_str("-"), "dark_grey"))
-      items_count += len(page.contents)
+      items_count += len(page.segments)
       print(_highlight_text(
         text=page.content,
-        segments=[(c.start, c.end) for c in page.contents]
+        segments=[(c.start, c.end) for c in page.segments]
       ))
 
     if len(page.annotations) > 0:
@@ -41,7 +48,7 @@ def show_items(text: str, pages: list[PageQueryItem]):
         print(f"Rank: {anno.rank}")
         print(_highlight_text(
           text=anno.content,
-          segments=[(anno.start, anno.end)]
+          segments=[(s.start, s.end) for s in anno.segments]
         ))
         if i < len(page.annotations) - 1:
           print("")
