@@ -5,7 +5,7 @@ import math
 from typing import Optional
 from dataclasses import dataclass
 from ..parser import PdfParser
-from ..index import Index, PdfQueryItem, PdfQueryKind
+from ..index import Index, IndexNode
 
 @dataclass
 class _Pdf:
@@ -57,7 +57,7 @@ class PageAnnoQueryItem:
   content: str
 
 class Trimmer:
-  def __init__(self, pdf_parser: PdfParser, index: Index, items: dict[str, list[PdfQueryItem]]):
+  def __init__(self, pdf_parser: PdfParser, index: Index, nodes: dict[str, list[IndexNode]]):
     self._pdf_parser: PdfParser = pdf_parser
     self._index: Index = index
     self._items: dict[str, list[PdfQueryItem]] = items

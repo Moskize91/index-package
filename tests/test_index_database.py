@@ -2,8 +2,8 @@ import os
 import unittest
 
 from index_package.segmentation import Segment
-from index_package.index2.index_db import IndexDB
-from index_package.index2 import FTS5DB, VectorDB, IndexNode, IndexNodeMatching
+from index_package.index.index_db import IndexDB
+from index_package.index import FTS5DB, VectorDB, IndexNode, IndexNodeMatching
 from tests.utils import get_temp_path
 
 class TestPdfParser(unittest.TestCase):

@@ -4,7 +4,7 @@ import unittest
 from index_package.parser import PdfParser
 from index_package.scanner import Event, EventKind, EventTarget
 from index_package.segmentation import Segmentation
-from index_package.index2 import Index, VectorDB, FTS5DB, IndexNodeMatching
+from index_package.index import Index, VectorDB, FTS5DB, IndexNodeMatching
 from tests.utils import get_temp_path
 
 class TestPdfParser(unittest.TestCase):

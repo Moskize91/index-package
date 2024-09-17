@@ -64,7 +64,7 @@ class Service:
         progress.complete_handle_file(path)
 
   def query(self, text: str, results_limit: Optional[int]) -> list[PageQueryItem]:
-    items = self._index.query(text, results_limit)
+    nodes = self._index.query(text, results_limit)
     trimmer = Trimmer(self._pdf_parser, self._index, items)
     return trimmer.do()
 
