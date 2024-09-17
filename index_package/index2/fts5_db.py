@@ -12,9 +12,7 @@ _INVALID_TOKENS = set(["", "NEAR", "AND", "OR", "NOT"])
 
 class FTS5DB:
   def __init__(self, db_path: str):
-    self._conn: sqlite3.Connection = self._connect(
-      db_path=db_path
-    )
+    self._conn: sqlite3.Connection = self._connect(db_path)
 
   def _connect(self, db_path: str) -> sqlite3.Connection:
     is_first_time = not os.path.exists(db_path)

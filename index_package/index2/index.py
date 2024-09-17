@@ -56,7 +56,7 @@ class Index:
         CREATE TABLE pages (
           id INTEGER PRIMARY KEY,
           pdf_hash TEXT NOT NULL,
-          index INTEGER NOT NULL,
+          page_index INTEGER NOT NULL,
           hash TEXT NOT NULL
         )
       """)
@@ -64,10 +64,10 @@ class Index:
         CREATE INDEX idx_files ON files (hash)
       """)
       cursor.execute("""
-        CREATE INDEX idx_pages ON files (hash)
+        CREATE INDEX idx_pages ON pages (hash)
       """)
       cursor.execute("""
-        CREATE INDEX idx_parent_pages ON files (pdf_hash, index)
+        CREATE INDEX idx_parent_pages ON pages (pdf_hash, page_index)
       """)
       conn.commit()
       cursor.close()
@@ -179,22 +179,23 @@ class Index:
     pdf = self._pdf_parser.pdf(hash, path, progress)
     for page in pdf.pages:
       self._cursor.execute(
-        "INSERT INTO pages (pdf_hash, index, hash) VALUES (?, ?, ?)",
+        "INSERT INTO pages (pdf_hash, page_index, hash) VALUES (?, ?, ?)",
         (hash, page.index, page.hash),
       )
     self._conn.commit()
     self._index_proxy.save(hash, "pdf", self._pdf_meta_to_document(pdf.meta))
 
     for page in pdf.pages:
-      self._cursor.execute("SELECT * FROM pages WHERE hash = ? LIMIT 1", (page.hash,))
-      if self._cursor.fetchone() is None:
+      self._cursor.execute("SELECT COUNT(*) FROM pages WHERE hash = ?", (page.hash,))
+      num_rows = self._cursor.fetchone()[0]
+      if num_rows == 1:
         self._handle_found_page_hash(page)
       if progress is not None:
         progress.on_complete_index_pdf_page(page.index, len(pdf.pages))
 
   def _handle_lost_pdf_hash(self, hash: str):
     self._cursor.execute(
-      "SELECT hash FROM pages WHERE pdf_hash = ? ORDER BY index", (hash,),
+      "SELECT hash FROM pages WHERE pdf_hash = ? ORDER BY page_index", (hash,),
     )
     page_hashes: list[str] = []
     for row in self._cursor.fetchall():
@@ -205,9 +206,8 @@ class Index:
     self._index_proxy.remove(hash)
 
     for page_hash in page_hashes:
-      self._cursor.execute("SELECT COUNT(*) FROM pages WHERE hash = ?", (page_hash,))
-      num_rows = self._cursor.fetchone()[0]
-      if num_rows == 1:
+      self._cursor.execute("SELECT * FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
+      if self._cursor.fetchone() is None:
         page = self._pdf_parser.page_with_hash(page_hash)
         if page is not None:
           self._handle_lost_page_hash(page)
@@ -266,9 +266,11 @@ class _IndexProxy:
   def save(self, id: str, type: str, text: str, properties: Optional[dict] = None):
     segments: list[Segment] = []
     for segment in self._segmentation.split(text):
-      if not is_empty_string(segment.text):
+      if is_empty_string(segment.text):
         continue
       segments.append(segment)
+    if len(segments) == 0:
+      return
     if properties is None:
       properties = { "type": type }
     else:

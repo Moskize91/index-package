@@ -72,9 +72,6 @@ class VectorDB:
     return nodes
 
   def save(self, node_id: str, segments: list[Segment], metadata: dict):
-    if len(segments) < 0:
-      return
-
     ids: list[ID] = []
     documents: list[Document] = []
     metadatas: list[Metadata] = []
