@@ -1,3 +1,5 @@
+import re
+
 from typing import cast, Any, Optional
 from numpy import ndarray
 from sentence_transformers import SentenceTransformer
@@ -33,7 +35,10 @@ class VectorDB:
     node2segments: dict[str, list[tuple[float, int, int, dict]]] = {}
 
     for i in range(len(ids)):
-      node_id, _ = ids[i].split("/", 1)
+      matches = re.match(r"(.*)/([^/]*)$", ids[i])
+      if matches is None:
+        raise ValueError(f"Invalid ID: {ids[i]}")
+      node_id = matches.group(1)
       metadata: dict[str, Any] = metadatas[i]
       distance = distances[i]
       start = metadata.pop("seg_start")

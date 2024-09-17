@@ -62,7 +62,7 @@ class TestPdfParser(unittest.TestCase):
       embedding_model_id="shibing624/text2vec-base-chinese"
     )
     db.save(
-      node_id="id1",
+      node_id="index/db/id1",
       segments=[
         Segment(start=0, end=100, text="Transference interpretations, like extratransference interpretations or indeed any behavior on the analyst’s part."),
         Segment(start=100, end=250, text="the transference in the here and now are the core of the analytic work."),
@@ -70,7 +70,7 @@ class TestPdfParser(unittest.TestCase):
       metadata={},
     )
     db.save(
-      node_id="id2",
+      node_id="index/db/id2",
       segments=[
         Segment(start=0, end=100, text="I am of the opinion that the range of settings."),
         Segment(start=100, end=250, text="most  people  would  call  this  treatment \"psychotherapy.\""),
@@ -81,7 +81,7 @@ class TestPdfParser(unittest.TestCase):
     nodes = db.query("the transference in the here and now are the core of the analytic work.", results_limit=1)
     self.assertEqual(len(nodes), 1)
     node = nodes[0]
-    self.assertEqual(node.id, "id1")
+    self.assertEqual(node.id, "index/db/id1")
 
   def test_database_query(self):
     fts5_db = FTS5DB(
