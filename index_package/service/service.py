@@ -1,6 +1,7 @@
 import os
 
 from typing import Optional
+from dataclasses import dataclass
 from .trimmer import trim_nodes, PageQueryItem
 from ..scanner import Scanner
 from ..parser import PdfParser
@@ -8,6 +9,11 @@ from ..segmentation import Segmentation
 from ..index import Index, VectorDB, FTS5DB
 from ..progress import Progress, ProgressListeners
 from ..utils import ensure_dir, ensure_parent_dir
+
+@dataclass
+class QueryResult:
+  page_items: list[PageQueryItem]
+  keywords: list[str]
 
 class Service:
   def __init__(
@@ -62,9 +68,10 @@ class Service:
         self._index.handle_event(event, progress)
         progress.complete_handle_file(path)
 
-  def query(self, text: str, results_limit: Optional[int]) -> list[PageQueryItem]:
-    nodes, _ = self._index.query(text, results_limit)
-    return trim_nodes(self._index, self._pdf_parser, nodes)
+  def query(self, text: str, results_limit: Optional[int]) -> QueryResult:
+    nodes, keywords = self._index.query(text, results_limit)
+    page_items = trim_nodes(keywords, self._index, self._pdf_parser, nodes)
+    return QueryResult(page_items, keywords)
 
   def get_paths(self, file_hash: str) -> list[str]:
     return self._index.get_paths(file_hash)

@@ -8,7 +8,7 @@ from index_package.index import Index, IndexNode, VectorDB, FTS5DB, IndexNodeMat
 from index_package.index.index_db import IndexDB
 from tests.utils import get_temp_path
 
-class TestPdfParser(unittest.TestCase):
+class TestIndex(unittest.TestCase):
   def test_fts5_query(self):
     db = FTS5DB(
       db_path=os.path.abspath(os.path.join(get_temp_path("index-database/fts5"), "db.sqlite3")),

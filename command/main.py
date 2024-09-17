@@ -72,11 +72,11 @@ def main():
       else:
         if text is None:
           raise Exception("You can search by providing text")
-        items = service.query(
+        query_result = service.query(
           text=text,
           results_limit=args.limit,
         )
-        show_items(text, items)
+        show_items(text, query_result)
 
 def _package_and_path(package_path: str) -> tuple[dict, str]:
   package_path = os.path.join(os.getcwd(), package_path)
