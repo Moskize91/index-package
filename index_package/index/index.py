@@ -1,15 +1,19 @@
+from __future__ import annotations
+
 import os
 import io
-import math
 import sqlite3
 
 from typing import Optional
+from index_package.parser.pdf import PdfPage
 
-from .abc_db import IndexDB, IndexItem
-from .types import PdfQueryKind, PdfQueryItem
+from .fts5_db import FTS5DB
+from .vector_db import VectorDB
+from .index_db import IndexDB
+from .types import IndexNode, PageRelativeToPDF
 from ..parser import PdfParser
 from ..scanner import Event, EventKind, EventTarget
-from ..segmentation import Segmentation
+from ..segmentation import Segment, Segmentation
 from ..progress import Progress
 from ..utils import hash_sha512, ensure_parent_dir, is_empty_string
 
@@ -19,12 +23,13 @@ class Index:
     index_dir_path: str,
     pdf_parser: PdfParser,
     segmentation: Segmentation,
-    databases: list[IndexDB],
+    fts5_db: FTS5DB,
+    vector_db: VectorDB,
     sources: dict[str, str],
   ):
     self._pdf_parser: PdfParser = pdf_parser
     self._segmentation: Segmentation = segmentation
-    self._databases: list[IndexDB] = databases
+    self._index_proxy: _IndexProxy = _IndexProxy(fts5_db, vector_db, segmentation)
     self._sources: dict[str, str] = sources
     self._conn: sqlite3.Connection = self._connect(
       ensure_parent_dir(os.path.join(index_dir_path, "index.sqlite3"))
@@ -48,7 +53,21 @@ class Index:
         )
       """)
       cursor.execute("""
+        CREATE TABLE pages (
+          id INTEGER PRIMARY KEY,
+          pdf_hash TEXT NOT NULL,
+          page_index INTEGER NOT NULL,
+          hash TEXT NOT NULL
+        )
+      """)
+      cursor.execute("""
         CREATE INDEX idx_files ON files (hash)
+      """)
+      cursor.execute("""
+        CREATE INDEX idx_pages ON pages (hash)
+      """)
+      cursor.execute("""
+        CREATE INDEX idx_parent_pages ON pages (pdf_hash, page_index)
       """)
       conn.commit()
       cursor.close()
@@ -61,13 +80,64 @@ class Index:
 
     for row in self._cursor.fetchall():
       scope, path = row
-      scope_path = self._sources.get(scope, None)
+      scope_path = self._get_abs_path(scope, path)
       if scope_path is not None:
-        path = os.path.join(scope_path, f".{path}")
-        path = os.path.abspath(path)
-        paths.append(path)
+        paths.append(scope_path)
 
     return paths
+
+  def get_page_relative_to_pdf(self, page_hash: str) -> list[PageRelativeToPDF]:
+    self._cursor.execute("SELECT pdf_hash, page_index FROM pages WHERE hash = ?", (page_hash,))
+    page_infos: list[tuple[str, int]] = []
+    pages: list[PageRelativeToPDF] = []
+
+    for row in self._cursor.fetchall():
+      pdf_hash, page_index = row
+      page_infos.append((pdf_hash, page_index))
+
+    for pdf_hash, page_index in page_infos:
+      self._cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (pdf_hash,))
+      for row in self._cursor.fetchall():
+        scope, path = row
+        scope_path = self._get_abs_path(scope, path)
+        if scope_path is not None:
+          pages.append(PageRelativeToPDF(
+            pdf_hash=pdf_hash,
+            pdf_path=scope_path,
+            page_index=page_index,
+          ))
+
+    return pages
+
+  def _get_abs_path(self, scope: str, path: str) -> Optional[str]:
+    scope_path = self._sources.get(scope, None)
+    if scope_path is None:
+      return None
+    path = os.path.join(scope_path, f".{path}")
+    path = os.path.abspath(path)
+    return path
+
+  def query(
+    self,
+    query_text: str,
+    results_limit: Optional[int] = None,
+    to_keywords: bool = True) -> tuple[list[IndexNode], list[str]]:
+
+    if results_limit is None:
+      results_limit = 10
+
+    if to_keywords:
+      keywords = self._segmentation.to_keywords(query_text)
+      query_text = " ".join(keywords)
+    else:
+      keywords = [query_text]
+
+    if is_empty_string(query_text):
+      query_nodes = []
+    else:
+      query_nodes = self._index_proxy.query(query_text, results_limit)
+
+    return query_nodes, keywords
 
   def handle_event(self, event: Event, progress: Optional[Progress] = None):
     path = self._filter_and_get_abspath(event)
@@ -113,13 +183,13 @@ class Index:
       self._cursor.execute("SELECT COUNT(*) FROM files WHERE hash = ?", (new_hash,))
       num_rows = self._cursor.fetchone()[0]
       if num_rows == 1:
-        self._handle_found_hash(new_hash, path, progress)
+        self._handle_found_pdf_hash(new_hash, path, progress)
 
     if origin is not None:
       _, origin_hash = origin
       self._cursor.execute("SELECT * FROM files WHERE hash = ? LIMIT 1", (origin_hash,))
       if self._cursor.fetchone() is None:
-        self._handle_lost_hash(origin_hash)
+        self._handle_lost_pdf_hash(origin_hash)
 
   def _filter_and_get_abspath(self, event: Event) -> Optional[str]:
     if event.target == EventTarget.Directory:
@@ -138,50 +208,44 @@ class Index:
 
     return path
 
-  def _handle_found_hash(self, hash: str, path: str, progress: Optional[Progress]):
+  def _handle_found_pdf_hash(self, hash: str, path: str, progress: Optional[Progress]):
     pdf = self._pdf_parser.pdf(hash, path, progress)
-    writer = _WritePdf2Index(
-      hash=hash,
-      segmentation=self._segmentation,
-      databases=self._databases,
-    )
-    writer.write(
-      type="pdf",
-      text=self._pdf_meta_to_document(pdf.meta),
-    )
     for page in pdf.pages:
-      writer.write(
-        type="pdf.page",
-        text=page.snapshot,
-        properties={
-          "page_index": page.index,
-        },
+      self._cursor.execute(
+        "INSERT INTO pages (pdf_hash, page_index, hash) VALUES (?, ?, ?)",
+        (hash, page.index, page.hash),
       )
-      for index, annotation in enumerate(page.annotations):
-        if annotation.content is not None:
-          writer.write(
-            type="pdf.page.anno.content",
-            text=annotation.content,
-            properties={
-              "page_index": page.index,
-              "anno_index": index,
-            },
-          )
-        if annotation.extracted_text is not None:
-          writer.write(
-            type="pdf.page.anno.extracted",
-            text=annotation.extracted_text,
-            properties={
-              "page_index": page.index,
-              "anno_index": index,
-            },
-          )
+    self._conn.commit()
+    self._index_proxy.save(hash, "pdf", self._pdf_meta_to_document(pdf.meta))
+
+    for page in pdf.pages:
+      self._cursor.execute("SELECT COUNT(*) FROM pages WHERE hash = ?", (page.hash,))
+      num_rows = self._cursor.fetchone()[0]
+      if num_rows == 1:
+        self._handle_found_page_hash(page)
       if progress is not None:
         progress.on_complete_index_pdf_page(page.index, len(pdf.pages))
 
-  def _handle_lost_hash(self, hash: str):
-    for database in self._databases:
-      database.remove_index(hash)
+  def _handle_lost_pdf_hash(self, hash: str):
+    self._cursor.execute(
+      "SELECT hash FROM pages WHERE pdf_hash = ? ORDER BY page_index", (hash,),
+    )
+    page_hashes: list[str] = []
+    for row in self._cursor.fetchall():
+      page_hashes.append(row[0])
+
+    self._cursor.execute("DELETE FROM pages WHERE pdf_hash = ?", (hash,))
+    self._conn.commit()
+    self._index_proxy.remove(hash)
+
+    for page_hash in page_hashes:
+      self._cursor.execute("SELECT * FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
+      if self._cursor.fetchone() is None:
+        page = self._pdf_parser.page(page_hash)
+        if page is not None:
+          self._handle_lost_page_hash(page)
+
+    self._pdf_parser.fire_file_removed(hash)
 
   def _pdf_meta_to_document(self, meta: dict) -> str:
     buffer = io.StringIO()
@@ -194,98 +258,58 @@ class Index:
       buffer.write("\n")
     return buffer.getvalue()
 
-  def query(
-    self,
-    query_text: str,
-    results_limit: Optional[int] = None,
-    to_keywords: bool = True) -> dict[str, list[PdfQueryItem]]:
-
-    if results_limit is None:
-      results_limit = 10
-
-    if to_keywords:
-      keywords = self._segmentation.to_keywords(query_text)
-      query_text = " ".join(keywords)
-
-    target_results: dict[str, list[PdfQueryItem]] = {}
-
-    if is_empty_string(query_text):
-      for database in self._databases:
-        target_results[database.name] = []
-      return target_results
-
-    for database in self._databases:
-      query_results = database.query([query_text], results_limit)[0]
-      sub_results: list[PdfQueryItem] = []
-      target_results[database.name] = sub_results
-
-      for item in query_results:
-        target_result = self._parse_item(item)
-        if target_result is not None:
-          sub_results.append(target_result)
-
-    return target_results
-
-  def _parse_item(self, item: IndexItem) -> Optional[PdfQueryItem]:
-    type = item.metadata["type"]
-    page_index: int = 0
-    anno_index: int = 0
-
-    if type == "pdf":
-      kind = PdfQueryKind.pdf
-    elif type == "pdf.page":
-      kind = PdfQueryKind.page
-      page_index = item.metadata["page_index"]
-    elif type == "pdf.page.anno.content":
-      kind = PdfQueryKind.anno_content
-      page_index = item.metadata["page_index"]
-      anno_index = item.metadata["anno_index"]
-    elif type == "pdf.page.anno.extracted":
-      kind = PdfQueryKind.anno_extracted
-      page_index = item.metadata["page_index"]
-      anno_index = item.metadata["anno_index"]
-    else:
-      return None
-
-    pdf_hash, _ = item.id.split("/", 1)
-    seg_start = item.metadata["seg_start"]
-    seg_end = item.metadata["seg_end"]
-
-    return PdfQueryItem(
-      kind=kind,
-      pdf_hash=pdf_hash,
-      page_index=page_index,
-      anno_index=anno_index,
-      segment_start=seg_start,
-      segment_end=seg_end,
-      rank=item.rank,
+  def _handle_found_page_hash(self, page: PdfPage):
+    self._index_proxy.save(
+      id=page.hash,
+      type="pdf.page",
+      text=page.snapshot,
     )
+    for index, annotation in enumerate(page.annotations):
+      if annotation.content is not None:
+        self._index_proxy.save(
+          id=f"{page.hash}/anno/{index}/content",
+          type="pdf.page.anno.content",
+          text=annotation.content,
+        )
+      if annotation.extracted_text is not None:
+        self._index_proxy.save(
+          id=f"{page.hash}/anno/{index}/extracted",
+          type="pdf.page.anno.extracted",
+          text=annotation.extracted_text,
+        )
 
-class _WritePdf2Index:
+  def _handle_lost_page_hash(self, page: PdfPage):
+    for index in range(len(page.annotations)):
+      self._index_proxy.remove(f"{page.hash}/anno/{index}/content")
+      self._index_proxy.remove(f"{page.hash}/anno/{index}/extracted")
+    self._index_proxy.remove(page.hash)
+
+class _IndexProxy:
   def __init__(self,
-    hash: str,
+    fts5_db: FTS5DB,
+    vector_db: VectorDB,
     segmentation: Segmentation,
-    databases: list[IndexDB],
   ):
+    self._index_db: IndexDB = IndexDB(fts5_db, vector_db)
     self._segmentation: Segmentation = segmentation
-    self._databases: list[IndexDB] = databases
-    self._hash: str = hash
-    self._index: int = 0
 
-  def write(self, type: str, text: str, properties: dict = {}):
+  def query(self, query: str, results_limit: int) -> list[IndexNode]:
+    return self._index_db.query(query, results_limit)
+
+  def save(self, id: str, type: str, text: str, properties: Optional[dict] = None):
+    segments: list[Segment] = []
     for segment in self._segmentation.split(text):
-      segment_text = segment.text
-      if is_empty_string(segment_text):
+      if is_empty_string(segment.text):
         continue
-      id = self._gen_id()
-      metadata = properties.copy()
-      metadata["type"] = type
-      metadata["seg_start"] = segment.start
-      metadata["seg_end"] = segment.end
-      for database in self._databases:
-        database.save_index(id, segment_text, metadata)
+      segments.append(segment)
+    if len(segments) == 0:
+      return
+    if properties is None:
+      properties = { "type": type }
+    else:
+      properties.copy()
+      properties["type"] = type
+    self._index_db.save(id, segments, properties)
 
-  def _gen_id(self) -> str:
-    id = f"{self._hash}/{self._index}"
-    self._index += 1
-    return id
+  def remove(self, id: str):
+    self._index_db.remove(id)

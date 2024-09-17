@@ -116,22 +116,7 @@ class PdfParser:
   def name(self) -> str:
     return "pdf"
 
-  def page(self, pdf_hash: str, page_index: int) -> Optional[PdfPage]:
-    pdf_id = self._pdf_id(pdf_hash)
-    if pdf_id is None:
-      return None
-
-    self._cursor.execute(
-      "SELECT hash FROM pages WHERE pdf_id = ? AND idx = ? LIMIT 1",
-      (pdf_id, page_index,),
-    )
-    row = self._cursor.fetchone()
-    if row is None:
-      return None
-
-    return PdfPage(self, pdf_id, page_index, row[0])
-
-  def page_with_hash(self, page_hash: str) -> Optional[PdfPage]:
+  def page(self, page_hash: str) -> Optional[PdfPage]:
     self._cursor.execute("SELECT pdf_id, idx FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
     row = self._cursor.fetchone()
     if row is not None:

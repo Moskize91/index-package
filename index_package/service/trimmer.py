@@ -1,191 +1,121 @@
 from __future__ import annotations
-
-import math
-
-from typing import Optional
 from dataclasses import dataclass
+
 from ..parser import PdfParser
-from ..index import Index, PdfQueryItem, PdfQueryKind
-
-@dataclass
-class _Pdf:
-  hash: str
-  file_paths: list[str]
-
-@dataclass
-class _PageCollection:
-  pdf_hash: str
-  page_index: int
-  segments: list[_PageSegment]
-  anno_content_list: list[_AnnoCollection]
-  anno_extracted_list: list[_AnnoCollection]
-  pdf: Optional[_Pdf] = None
-  rank: float = 0.0
-
-@dataclass
-class _PageSegment:
-  rank: float
-  segment: tuple[int, int]
-
-@dataclass
-class _AnnoCollection:
-  index: int
-  rank: float
-  segment: tuple[int, int]
+from ..index import Index, IndexNode, IndexNodeMatching
 
 @dataclass
 class PageQueryItem:
-  index: int
-  pdf_files: list[str]
+  pdf_files: list[PagePDFFile]
   rank: float
   content: str
-  contents: list[PageContentQueryItem]
+  segments: list[PageHighlightSegment]
   annotations: list[PageAnnoQueryItem]
 
 @dataclass
-class PageContentQueryItem:
-  start: int
-  end: int
-  rank: float
+class PagePDFFile:
+  pdf_path: str
+  page_index: int
 
 @dataclass
 class PageAnnoQueryItem:
   index: int
-  start: int
-  end: int
   rank: float
   content: str
+  segments: list[PageHighlightSegment]
 
-class Trimmer:
-  def __init__(self, pdf_parser: PdfParser, index: Index, items: dict[str, list[PdfQueryItem]]):
-    self._pdf_parser: PdfParser = pdf_parser
-    self._index: Index = index
-    self._items: dict[str, list[PdfQueryItem]] = items
-    self._pdfs: dict[str, _Pdf] = {}
-    self._page_collections: dict[tuple[str, int], _PageCollection] = {}
+@dataclass
+class PageHighlightSegment:
+  start: int
+  end: int
+  highlights: list[tuple[int, int]]
 
-  def do(self) -> list[PageQueryItem]:
-    self._save_items_into_page_collections()
-    self._collect_infos_of_pdf()
+def trim_nodes(keywords: list[str], index: Index, pdf_parser: PdfParser, nodes: list[IndexNode]) -> list[PageQueryItem]:
+  highlight_marker = _HighlightMarker(keywords)
+  query_items: list[PageQueryItem] = []
+  query_items_dict: dict[str, PageQueryItem] = {}
 
-    return self._response_final_items(
-      page_collections=self._count_rank_and_sort(),
-    )
+  for node in nodes:
+    type = node.metadata.get("type", None)
+    page = pdf_parser.page(node.id)
 
-  def _save_items_into_page_collections(self):
-    for item in self._items["fts5"]:
-      kind = item.kind
-      if kind == PdfQueryKind.page:
-        self._page_collection(item).segments.append(
-          _PageSegment(
-            rank=item.rank,
-            segment=(item.segment_start, item.segment_end),
-          )
+    if page is None:
+      continue
+
+    if type == "pdf.page.anno.content":
+      id_cells = node.id.split("/")
+      page_hash = id_cells[0]
+      page_index = int(id_cells[2])
+      anno_content = page.annotations[page_index].content
+      query_item = query_items_dict.get(page_hash, None)
+      if anno_content is not None and query_item is not None:
+        anno_item = PageAnnoQueryItem(
+          index=page_index,
+          rank=node.rank,
+          content=anno_content,
+          segments=[],
         )
-      if kind == PdfQueryKind.anno_content:
-        self._page_collection(item).anno_content_list.append(
-          _AnnoCollection(
-            index=item.anno_index,
-            rank=item.rank,
-            segment=(item.segment_start, item.segment_end),
-          )
-        )
-      if kind == PdfQueryKind.anno_extracted:
-        self._page_collection(item).anno_extracted_list.append(
-          _AnnoCollection(
-            index=item.anno_index,
-            rank=item.rank,
-            segment=(item.segment_start, item.segment_end),
-          )
+        query_item.annotations.append(anno_item)
+        anno_item.segments = highlight_marker.mark(
+          content=anno_content,
+          segments=node.segments,
+          ignore_empty_segments=node.matching != IndexNodeMatching.Similarity,
         )
 
-  def _page_collection(self, item: PdfQueryItem):
-    pdf_hash = item.pdf_hash
-    page_index = item.page_index
-    collection = self._page_collections.get((pdf_hash, page_index), None)
-    if collection is None:
-      collection = _PageCollection(
-        pdf_hash=pdf_hash,
-        page_index=page_index,
-        segments=[],
-        anno_content_list=[],
-        anno_extracted_list=[],
+    elif type == "pdf.page":
+      content = page.snapshot
+      query_item = PageQueryItem(
+        pdf_files=[],
+        rank=node.rank,
+        content=content,
+        annotations=[],
+        segments=highlight_marker.mark(
+          content=content,
+          segments=node.segments,
+          ignore_empty_segments=node.matching != IndexNodeMatching.Similarity,
+        ),
       )
-      self._page_collections[(pdf_hash, page_index)] = collection
-    return collection
+      for relative_to in index.get_page_relative_to_pdf(page.hash):
+        query_item.pdf_files.append(PagePDFFile(
+          pdf_path=relative_to.pdf_path,
+          page_index=relative_to.page_index,
+        ))
+      query_items_dict[page.hash] = query_item
+      query_items.append(query_item)
 
-  def _collect_infos_of_pdf(self):
-    for item in self._page_collections.values():
-      pdf_hash = item.pdf_hash
-      pdf = self._pdfs.get(pdf_hash, None)
-      if pdf is None:
-        pdf = _Pdf(
-          hash=pdf_hash,
-          file_paths=self._index.get_paths(pdf_hash),
-        )
-        self._pdfs[pdf_hash] = pdf
-      item.pdf = pdf
+  for query_item in query_items:
+    query_item.annotations.sort(key=lambda item: item.index)
 
-  def _count_rank_and_sort(self) -> list[_PageCollection]:
-    page_collections: list[_PageCollection] = []
+  return query_items
 
-    for page_collection in self._page_collections.values():
-      page_collection.segments.sort(key=lambda x: x.rank)
-      page_collection.anno_content_list.sort(key=lambda x: x.rank)
-      page_collection.anno_extracted_list.sort(key=lambda x: x.rank)
-      page_rank = float("inf")
+class _HighlightMarker:
+  def __init__(self, keywords: list[str]):
+    self._keywords: list[str] = [k.lower() for k in keywords]
 
-      if len(page_collection.segments) > 0:
-        page_rank = min(page_rank, page_collection.segments[0].rank)
-      if len(page_collection.anno_content_list) > 0:
-        page_rank = min(page_rank, page_collection.anno_content_list[0].rank)
-      if math.isinf(page_rank):
-        continue
+  def mark(self, content: str, segments: list[tuple[int, int]], ignore_empty_segments: bool) -> list[PageHighlightSegment]:
+    content = content.lower()
+    highlight_segments: list[PageHighlightSegment] = []
+    for start, end in segments:
+      highlights: list[tuple[int, int]] = []
+      for keyword in self._keywords:
+        for highlight in self._search_highlights(keyword, start, end, content):
+          highlights.append(highlight)
 
-      page_collection.rank = page_rank
-      page_collections.append(page_collection)
+      if not ignore_empty_segments or len(highlights) > 0:
+        highlights.sort(key=lambda h: h[0])
+        highlight_segments.append(PageHighlightSegment(
+          start=start,
+          end=end,
+          highlights=highlights,
+        ))
+    return highlight_segments
 
-    page_collections.sort(key=lambda x: x.rank)
-    return page_collections
-
-
-  def _response_final_items(self, page_collections: list[_PageCollection]) -> list[PageQueryItem]:
-    items: list[PageQueryItem] = []
-
-    for page_collection in page_collections:
-      assert page_collection.pdf is not None
-      page = self._pdf_parser.page(page_collection.pdf.hash, page_collection.page_index)
-      if page is None:
-        continue
-      item = PageQueryItem(
-        pdf_files = page_collection.pdf.file_paths,
-        index=page_collection.page_index,
-        rank = page_collection.rank,
-        content = page.snapshot,
-        contents = [],
-        annotations = [],
-      )
-      for segment in page_collection.segments:
-        item.contents.append(
-          PageContentQueryItem(
-            start=segment.segment[0],
-            end=segment.segment[1],
-            rank=segment.rank,
-          )
-        )
-      for anno_content in page_collection.anno_content_list:
-        anno = page.annotations[anno_content.index]
-        if anno.content is None:
-          continue
-        item.annotations.append(
-          PageAnnoQueryItem(
-            index=anno_content.index,
-            start=anno_content.segment[0],
-            end=anno_content.segment[1],
-            rank=anno_content.rank,
-            content=anno.content,
-          )
-        )
-      items.append(item)
-
-    return items
+  def _search_highlights(self, keyword: str, start: int, end: int, content: str):
+    finding_start = start
+    while finding_start < end:
+      index = content.find(keyword, finding_start, end)
+      if index == -1:
+        break
+      offset = index - start
+      finding_start = index + len(keyword)
+      yield (offset, offset + len(keyword))

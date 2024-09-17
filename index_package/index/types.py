@@ -1,18 +1,21 @@
 from dataclasses import dataclass
 from enum import Enum
 
-class PdfQueryKind(Enum):
-  pdf = 1
-  page = 2
-  anno_content = 3
-  anno_extracted = 4
+class IndexNodeMatching(Enum):
+  Matched = "matched"
+  MatchedPartial = "matched_partial"
+  Similarity = "similarity"
 
 @dataclass
-class PdfQueryItem:
-  kind: PdfQueryKind
-  pdf_hash: str
-  page_index: int
-  anno_index: int
-  segment_start: int
-  segment_end: int
+class IndexNode:
+  id: str
+  matching: IndexNodeMatching
+  metadata: dict
   rank: float
+  segments: list[tuple[int, int]]
+
+@dataclass
+class PageRelativeToPDF:
+  pdf_hash: str
+  pdf_path: str
+  page_index: int
