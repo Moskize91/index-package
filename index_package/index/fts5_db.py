@@ -80,23 +80,10 @@ class FTS5DB:
           node_id, content, metadata_json, encoded_segments = row
           metadata: dict = json.loads(metadata_json)
           type = metadata.get("type", "undefined")
-          segments = self._decode_segment(content, encoded_segments)
-          rank = self._calculate_rank(query_tokens, segments)
-          index_segments: list[IndexSegment] = []
-
-          for start, end, tokens in segments:
-            matched_tokens_set = set()
-            for token in tokens:
-              if token in query_tokens_set:
-                matched_tokens_set.add(token)
-            matched_tokens = list(matched_tokens_set)
-            matched_tokens.sort()
-            if len(matched_tokens) > 0:
-              index_segments.append(IndexSegment(
-                start=start,
-                end=end,
-                matched_tokens=matched_tokens
-              ))
+          segments, rank = self._analysis_segments(
+            query_tokens_set,
+            segments=self._decode_segment(content, encoded_segments),
+          )
           node = IndexNode(
             id=node_id,
             type=type,
@@ -104,7 +91,7 @@ class FTS5DB:
             metadata=metadata,
             fts5_rank=rank,
             vector_distance=0.0,
-            segments=index_segments,
+            segments=segments,
           )
           yield node
 
@@ -152,23 +139,26 @@ class FTS5DB:
       self._conn.rollback()
       raise e
 
-  def _calculate_rank(self, query_tokens: list[str], segments: list[_Segment]) -> float:
-    # TODO: 根据 index_segments 新逻辑写到一起
-    query_tokens_len = len(query_tokens)
+  def _analysis_segments(self, query_tokens_set: set[str], segments: list[_Segment]) -> tuple[list[IndexSegment], float]:
+    query_tokens_len = len(query_tokens_set)
+    target_segments: list[IndexSegment] = []
     match_count_list: list[bool] = [False for _ in range(query_tokens_len)]
-    matched_segment_indexes: list[int] = []
 
-    for index, segment in enumerate(segments):
-      tokens = segment[2]
-      tokens_set = set(tokens)
-      matched_count: int = 0
-      for query_token in query_tokens:
-        if query_token in tokens_set:
-          matched_count += 1
+    for start, end, tokens in segments:
+      matched_tokens_set = set()
+      for token in tokens:
+        if token in query_tokens_set:
+          matched_tokens_set.add(token)
+      matched_tokens = list(matched_tokens_set)
+      matched_tokens.sort()
 
-      if matched_count > 0:
-        matched_segment_indexes.append(index)
-        match_count_list[query_tokens_len - matched_count] = True
+      if len(matched_tokens) > 0:
+        match_count_list[query_tokens_len - len(matched_tokens)] = True
+        target_segments.append(IndexSegment(
+          start=start,
+          end=end,
+          matched_tokens=matched_tokens
+        ))
 
     sum_rank = 0.0
     rank = 1.0
@@ -178,7 +168,7 @@ class FTS5DB:
         sum_rank += rank
       rank *= 0.35
 
-    return sum_rank
+    return target_segments, rank
 
   def _encode_segments(self, segments: list[Segment]) -> tuple[str, list[str]]:
     encoded: list[str] = []
