@@ -83,7 +83,8 @@ class FTS5DB:
             id=node_id,
             matching=matching,
             metadata=metadata,
-            rank=rank,
+            fts5_rank=rank,
+            vector_distance=0.0,
             segments=[(s[0], s[1]) for s in segments],
           )
           yield node

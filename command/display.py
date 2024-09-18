@@ -30,6 +30,8 @@ def show_items(text: str, query_result: QueryResult):
     if len(page.annotations) > 0:
       print(f"Found Annotations: {len(page.annotations)}")
 
+    print(f"Distance: {page.distance}")
+
     if len(page.segments) > 0:
       print(colored(_split_str("-"), "dark_grey"))
       items_count += len(page.segments)
@@ -43,7 +45,7 @@ def show_items(text: str, query_result: QueryResult):
       for i, anno in enumerate(page.annotations):
         items_count += 1
         print(f"Annotation Index: {anno.index + 1}")
-        print(f"Rank: {anno.rank}")
+        print(f"Distance: {anno.distance}")
         print(_highlight_text(
           text=anno.content,
           segments=anno.segments

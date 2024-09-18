@@ -59,6 +59,7 @@ class TestIndex(unittest.TestCase):
 
   def test_vector_query(self):
     db = VectorDB(
+      distance_space="l2",
       index_dir_path=get_temp_path("index-database/vector"),
       embedding_model_id="shibing624/text2vec-base-chinese"
     )
@@ -79,7 +80,8 @@ class TestIndex(unittest.TestCase):
       ],
       metadata={},
     )
-    nodes = db.query("the transference in the here and now are the core of the analytic work.", results_limit=1)
+    query_embedding = db.encode_embedding("the transference in the here and now are the core of the analytic work.")
+    nodes = db.query(query_embedding, results_limit=1)
     self.assertEqual(len(nodes), 1)
     node = nodes[0]
     self.assertEqual(node.id, "index/db/id1")
@@ -89,6 +91,7 @@ class TestIndex(unittest.TestCase):
       db_path=os.path.abspath(os.path.join(get_temp_path("index-database/database"), "db.sqlite3")),
     )
     vector_db = VectorDB(
+      distance_space="l2",
       index_dir_path=get_temp_path("index-database/database/vector"),
       embedding_model_id="shibing624/text2vec-base-chinese"
     )
@@ -128,8 +131,8 @@ class TestIndex(unittest.TestCase):
 
     self.assertEqual(results, [
       ("id1", IndexNodeMatching.Matched),
-      ("id3", IndexNodeMatching.MatchedPartial),
       ("id4", IndexNodeMatching.MatchedPartial),
+      ("id3", IndexNodeMatching.MatchedPartial),
       ("id5", IndexNodeMatching.MatchedPartial),
       ("id2", IndexNodeMatching.Similarity),
     ])
@@ -147,6 +150,7 @@ class TestIndex(unittest.TestCase):
       )),
     )
     vector_db = VectorDB(
+      distance_space="l2",
       index_dir_path=get_temp_path("index_vector/vector_db"),
       embedding_model_id="shibing624/text2vec-base-chinese",
     )

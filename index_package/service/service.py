@@ -46,6 +46,7 @@ class Service:
       ),
       vector_db=VectorDB(
         embedding_model_id=embedding_model_id,
+        distance_space="l2",
         index_dir_path=ensure_dir(
           os.path.abspath(os.path.join(workspace_path, "vector_db")),
         ),
