@@ -5,13 +5,12 @@ import io
 import sqlite3
 
 from typing import Optional
-from index_package.parser.pdf import PdfPage
 
 from .fts5_db import FTS5DB
 from .vector_db import VectorDB
 from .index_db import IndexDB
 from .types import IndexNode, PageRelativeToPDF
-from ..parser import PdfParser
+from ..parser import PdfParser, PdfMetadata, PdfPage
 from ..scanner import Event, EventKind, EventTarget
 from ..segmentation import Segment, Segmentation
 from ..progress import Progress
@@ -216,7 +215,7 @@ class Index:
         (hash, page.index, page.hash),
       )
     self._conn.commit()
-    self._index_proxy.save(hash, "pdf", self._pdf_meta_to_document(pdf.meta))
+    self._index_proxy.save(hash, "pdf", self._pdf_metadata_to_document(pdf.metadata))
 
     for page in pdf.pages:
       self._cursor.execute("SELECT COUNT(*) FROM pages WHERE hash = ?", (page.hash,))
@@ -247,15 +246,14 @@ class Index:
 
     self._pdf_parser.fire_file_removed(hash)
 
-  def _pdf_meta_to_document(self, meta: dict) -> str:
+  def _pdf_metadata_to_document(self, metadata: PdfMetadata) -> str:
     buffer = io.StringIO()
-    keys = list(meta.keys())
-    keys.sort()
-    for key in keys:
-      buffer.write(key)
-      buffer.write(": ")
-      buffer.write(meta[key])
-      buffer.write("\n")
+    if metadata.author is not None:
+      buffer.write(f"Author: {metadata.author}\n")
+    if metadata.modified_at is not None:
+      buffer.write(f"Modified At: {metadata.modified_at}\n")
+    if metadata.producer is not None:
+      buffer.write(f"Producer: {metadata.producer}\n")
     return buffer.getvalue()
 
   def _handle_found_page_hash(self, page: PdfPage):
