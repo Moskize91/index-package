@@ -3,8 +3,8 @@ import re
 import json
 import sqlite3
 
-from typing import Generator
-from .types import IndexNode, IndexNodeMatching
+from typing import Generator, Callable
+from .types import IndexNode, IndexSegment, IndexNodeMatching
 from ..segmentation import Segment
 
 _Segment = tuple[int, int, list[str]]
@@ -53,6 +53,8 @@ class FTS5DB:
   ) -> Generator[IndexNode, None, None]:
 
     query_tokens = self._split_tokens(query_text)
+    query_tokens_set = set(query_tokens)
+
     if len(query_tokens) == 0:
       return
 
@@ -77,15 +79,32 @@ class FTS5DB:
         for row in rows:
           node_id, content, metadata_json, encoded_segments = row
           metadata: dict = json.loads(metadata_json)
+          type = metadata.get("type", "undefined")
           segments = self._decode_segment(content, encoded_segments)
           rank = self._calculate_rank(query_tokens, segments)
+          index_segments: list[IndexSegment] = []
+
+          for start, end, tokens in segments:
+            matched_tokens_set = set()
+            for token in tokens:
+              if token in query_tokens_set:
+                matched_tokens_set.add(token)
+            matched_tokens = list(matched_tokens_set)
+            matched_tokens.sort()
+            if len(matched_tokens) > 0:
+              index_segments.append(IndexSegment(
+                start=start,
+                end=end,
+                matched_tokens=matched_tokens
+              ))
           node = IndexNode(
             id=node_id,
+            type=type,
             matching=matching,
             metadata=metadata,
             fts5_rank=rank,
             vector_distance=0.0,
-            segments=[(s[0], s[1]) for s in segments],
+            segments=index_segments,
           )
           yield node
 
@@ -134,6 +153,7 @@ class FTS5DB:
       raise e
 
   def _calculate_rank(self, query_tokens: list[str], segments: list[_Segment]) -> float:
+    # TODO: 根据 index_segments 新逻辑写到一起
     query_tokens_len = len(query_tokens)
     match_count_list: list[bool] = [False for _ in range(query_tokens_len)]
     matched_segment_indexes: list[int] = []
@@ -165,7 +185,7 @@ class FTS5DB:
     tokens: list[str] = []
 
     for s in segments:
-      segment_tokens = self._split_tokens(s.text)
+      segment_tokens = self._split_tokens(s.text.lower())
       if len(segment_tokens) == 0:
         continue
       encoded.append(f"{len(segment_tokens)}:{s.start}-{s.end}")

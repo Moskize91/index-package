@@ -13,20 +13,30 @@ class TestIndex(unittest.TestCase):
     db = FTS5DB(
       db_path=os.path.abspath(os.path.join(get_temp_path("index-database/fts5"), "db.sqlite3")),
     )
+    documents = {}
+    documents["id1"] = [
+      "Transference interpretations, like extratransference interpretations or indeed any behavior on the analyst’s part.",
+      "the transference in the here and now are the core of the analytic work.",
+    ]
+    documents["id2"] = [
+      "I am of the opinion that the range of settings.",
+      "most  people  would  call  this  treatment \"psychotherapy.\"",
+      "which the  technique  of  analysis  of  the  transference is appropriate",
+    ]
     db.save(
       node_id="id1",
       segments=[
-        Segment(start=0, end=100, text="Transference interpretations, like extratransference interpretations or indeed any behavior on the analyst’s part."),
-        Segment(start=100, end=250, text="the transference in the here and now are the core of the analytic work."),
+        Segment(start=0, end=100, text=documents["id1"][0]),
+        Segment(start=100, end=250, text=documents["id1"][1]),
       ],
       metadata={},
     )
     db.save(
       node_id="id2",
       segments=[
-        Segment(start=0, end=100, text="I am of the opinion that the range of settings."),
-        Segment(start=100, end=250, text="most  people  would  call  this  treatment \"psychotherapy.\""),
-        Segment(start=250, end=350, text="which the  technique  of  analysis  of  the  transference is appropriate"),
+        Segment(start=0, end=100, text=documents["id2"][0]),
+        Segment(start=100, end=250, text=documents["id2"][1]),
+        Segment(start=250, end=350, text=documents["id2"][2]),
       ],
       metadata={},
     )
@@ -38,7 +48,10 @@ class TestIndex(unittest.TestCase):
     node = nodes[0]
 
     self.assertEqual(node.id, "id2")
-    self.assertEqual(node.segments, [(0, 100), (100, 250), (250, 350)])
+    self.assertEqual(
+      [(s.start, s.end, s.matched_tokens) for s in node.segments],
+      [(250, 350, ["analysis", "transference"])],
+    )
 
     nodes = []
     for node in db.query("Transference analysis", is_or_condition=True):
@@ -48,7 +61,10 @@ class TestIndex(unittest.TestCase):
     node = nodes[0]
 
     self.assertEqual(node.id, "id1")
-    self.assertEqual(node.segments, [(0, 100), (100, 250)])
+    self.assertEqual(
+      [(s.start, s.end) for s in node.segments],
+      [(0, 100), (100, 250)],
+    )
 
     db.remove("id2")
     nodes = []
@@ -178,4 +194,7 @@ class TestIndex(unittest.TestCase):
     node = nodes[0]
     self.assertEqual(node.id, "Ayy2i4OK41YmIejdNJYTfyl6SgC_7zd7q05vDUenDOBEmN3T6gtKTC5gP5a_-dxufdntkgR3f2agbwww5a3AsA==/anno/0/content")
     self.assertEqual(node.matching, IndexNodeMatching.Similarity)
-    self.assertEqual(node.segments, [(0, len("Identification"))])
+    self.assertEqual(
+      [(s.start, s.end) for s in node.segments],
+      [(0, len("Identification"))],
+    )

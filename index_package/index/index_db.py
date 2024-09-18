@@ -1,3 +1,4 @@
+from typing import Callable
 from .types import IndexNode, IndexNodeMatching
 from .fts5_db import FTS5DB
 from .vector_db import VectorDB, Embedding

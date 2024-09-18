@@ -71,7 +71,7 @@ class Service:
 
   def query(self, text: str, results_limit: Optional[int]) -> QueryResult:
     nodes, keywords = self._index.query(text, results_limit)
-    page_items = trim_nodes(keywords, self._index, self._pdf_parser, nodes)
+    page_items = trim_nodes(self._index, self._pdf_parser, nodes)
     return QueryResult(page_items, keywords)
 
   def get_paths(self, file_hash: str) -> list[str]:

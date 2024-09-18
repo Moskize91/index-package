@@ -9,7 +9,7 @@ from chromadb.api import ClientAPI
 from chromadb.api.types import ID, EmbeddingFunction, IncludeEnum, Documents, Embedding, Embeddings, Document, Metadata
 from chromadb.utils import distance_functions
 
-from .types import IndexNode, IndexNodeMatching
+from .types import IndexNode, IndexSegment, IndexNodeMatching
 from ..segmentation.segmentation import Segment
 
 _DistanceFunction = Callable[[ArrayLike, ArrayLike], float]
@@ -90,19 +90,25 @@ class VectorDB:
 
     nodes: list[IndexNode] = []
     for node_id, segments in node2segments.items():
-      node_segments: list[tuple[int, int]] = []
+      node_segments: list[IndexSegment] = []
       node_metadata: Optional[dict] = None
       min_distance: float = float("inf")
       for distance, start, end, metadata in segments:
-        node_segments.append((start, end))
+        node_segments.append(IndexSegment(
+          start=start,
+          end=end,
+          matched_tokens=[],
+        ))
         if node_metadata is None:
           node_metadata = metadata
         if distance < min_distance:
           min_distance = distance
       if node_metadata is None:
         continue
+      type = node_metadata.get("type", "undefined")
       nodes.append(IndexNode(
         id=node_id,
+        type=type,
         matching=matching,
         metadata=node_metadata,
         fts5_rank=0.0,
