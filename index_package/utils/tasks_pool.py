@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import cast, Optional, TypeVar, Generic, Callable
+from enum import Enum
+from typing import Optional, TypeVar, Generic, Callable
 
 import traceback
 import threading
@@ -47,6 +48,11 @@ class _SemaphoreValue(Generic[E]):
       self._sem_element.release()
       self._ack_queue.put(False)
 
+class TasksPoolResultState(Enum):
+  Success = 0,
+  Interrupted = 1,
+  RaisedException = 2,
+
 # no thread safety
 class TasksPool(Generic[E]):
   def __init__(
@@ -55,6 +61,8 @@ class TasksPool(Generic[E]):
     on_handle: Callable[[E], None],
     print_error: bool = True,
   ):
+    self._state: TasksPoolResultState = TasksPoolResultState.Success
+    self._state_lock: threading.Lock = threading.Lock()
     self._max_workers = max_workers
     self._on_handle: Callable[[E], None] = on_handle
     self._print_error: bool = print_error
@@ -83,6 +91,10 @@ class TasksPool(Generic[E]):
 
   # THREAD SAFE: block until all stopped
   def interrupt(self):
+    with self._state_lock:
+      if self._state != TasksPoolResultState.RaisedException:
+        self._state = TasksPoolResultState.Interrupted
+
     self._interrupted_event.set()
     self._semaphore_value.release_putter()
     self._completed_event.wait()
@@ -90,11 +102,12 @@ class TasksPool(Generic[E]):
       thread.join()
 
   # complete all threads and block until all stopped
-  def complete(self):
+  def complete(self) -> TasksPoolResultState:
     self._completed_event.set()
     self._semaphore_value.release_putter()
     for thread in self._threads:
       thread.join()
+    return self._state
 
   # this function is running in daemon thread
   def _start_thread_loop(self):
@@ -112,7 +125,10 @@ class TasksPool(Generic[E]):
 
     except InterruptException:
       pass
-    except Exception as e:
+
+    except Exception as _:
+      with self._state_lock:
+        self._state = TasksPoolResultState.RaisedException
       if self._print_error:
         traceback.print_exc()
       if not self._interrupted_event.is_set():
