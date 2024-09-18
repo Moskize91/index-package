@@ -2,7 +2,7 @@ import os
 
 from typing import Optional
 from dataclasses import dataclass
-from .trimmer import trim_nodes, QueryItem, PdfQueryItem, PageQueryItem
+from .trimmer import trim_nodes, QueryItem
 from ..scanner import Scanner
 from ..parser import PdfParser
 from ..segmentation import Segmentation
