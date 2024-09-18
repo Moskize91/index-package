@@ -2,7 +2,7 @@ import os
 
 from typing import Optional
 from dataclasses import dataclass
-from .trimmer import trim_nodes, PageQueryItem
+from .trimmer import trim_nodes, QueryItem, PdfQueryItem, PageQueryItem
 from ..scanner import Scanner
 from ..parser import PdfParser
 from ..segmentation import Segmentation
@@ -12,7 +12,7 @@ from ..utils import ensure_dir, ensure_parent_dir
 
 @dataclass
 class QueryResult:
-  page_items: list[PageQueryItem]
+  items: list[QueryItem]
   keywords: list[str]
 
 class Service:
@@ -71,11 +71,8 @@ class Service:
 
   def query(self, text: str, results_limit: Optional[int]) -> QueryResult:
     nodes, keywords = self._index.query(text, results_limit)
-    page_items = trim_nodes(keywords, self._index, self._pdf_parser, nodes)
-    return QueryResult(page_items, keywords)
-
-  def get_paths(self, file_hash: str) -> list[str]:
-    return self._index.get_paths(file_hash)
+    trimmed_nodes = trim_nodes(self._index, self._pdf_parser, nodes)
+    return QueryResult(trimmed_nodes, keywords)
 
   def page_content(self, pdf_hash: str, page_index: int) -> str:
     pdf = self._pdf_parser.pdf_or_none(pdf_hash)

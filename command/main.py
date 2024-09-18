@@ -76,7 +76,7 @@ def main():
           text=text,
           results_limit=args.limit,
         )
-        show_items(text, query_result)
+        show_items(query_result)
 
 def _package_and_path(package_path: str) -> tuple[dict, str]:
   package_path = os.path.join(os.getcwd(), package_path)

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
@@ -9,11 +10,18 @@ class IndexNodeMatching(Enum):
 @dataclass
 class IndexNode:
   id: str
+  type: str
   matching: IndexNodeMatching
   metadata: dict
   fts5_rank: float
   vector_distance: float
-  segments: list[tuple[int, int]]
+  segments: list[IndexSegment]
+
+@dataclass
+class IndexSegment:
+  start: int
+  end: int
+  matched_tokens: list[str]
 
 @dataclass
 class PageRelativeToPDF:

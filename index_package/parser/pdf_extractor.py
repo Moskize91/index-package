@@ -26,51 +26,30 @@ class Annotation:
   quad_points: Optional[list[float]]
   extracted_text: Optional[str]
 
-class _AnnotationPolygon:
-  def __init__(self, quad_points: list[float]):
-    self._polygons: list[Polygon] = []
-    for i in range(int(len(quad_points) / 8)):
-      x0 = float("inf")
-      x1 = -float("inf")
-      y0 = float("inf")
-      y1 = -float("inf")
-      for j in range(4):
-        index = i*8 + j*2
-        x = quad_points[index]
-        y = quad_points[index + 1]
-        x0 = min(x0, x)
-        x1 = max(x1, x)
-        y0 = min(y0, y)
-        y1 = max(y1, y)
-      polygon = Polygon(((x0, y0), (x1, y0), (x1, y1), (x0, y1)))
-      if polygon.is_valid:
-        self._polygons.append(polygon)
+def extract_metadata_with_pdf(pdf_path: str) -> dict:
+  with pdfplumber.open(pdf_path) as pdf_file:
+    origin = pdf_file.metadata
+    modified_at = origin.get("ModDate", None)
+    if modified_at is not None:
+      modified_at = _convert_to_utc(modified_at)
 
-  @property
-  def is_valid(self) -> bool:
-    return len(self._polygons) > 0
+    return {
+      "author": origin.get("Author", None),
+      "modified_at": modified_at,
+      "producer": origin.get("Producer", None),
+    }
 
-  def intersects(self, x0: float, y0: float, x1: float, y1: float) -> bool:
-    target_polygon = Polygon(((x0, y0), (x1, y0), (x1, y1), (x0, y1)))
-    for polygon in self._polygons:
-      if polygon.overlaps(target_polygon):
-        return True
-    return False
-
-  def contains(self, x0: float, y0: float, x1: float, y1: float) -> bool:
-    # make target smaller to be contained
-    rate = 0.01
-    center_x = (x0 + x1) / 2.0
-    center_y = (y0 + y1) / 2.0
-    x0 += (center_x - x0) * rate
-    y0 += (center_y - y0) * rate
-    x1 += (center_x - x1) * rate
-    y1 += (center_y - y1) * rate
-    target_polygon = Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
-    for polygon in self._polygons:
-      if polygon.contains(target_polygon):
-        return True
-    return False
+def _convert_to_utc(timestamp: str):
+  pattern = r"D:(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})([\+\-]\d{2})'(\d{2})"
+  match = re.match(pattern, timestamp)
+  if match:
+      year, month, day, hour, minute, second, timezone_offset_hour, timezone_offset_minute = match.groups()
+      dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+      utc_offset = timedelta(hours=int(timezone_offset_hour), minutes=int(timezone_offset_minute))
+      dt_adjusted = dt - utc_offset
+      return dt_adjusted.strftime("%Y-%m-%d %H:%M:%S")
+  else:
+      return None
 
 class PdfExtractor:
   def __init__(self, pages_path: str):
@@ -164,9 +143,9 @@ class PdfExtractor:
         updated_date = data.get("M", None)
 
         if creation_date is not None:
-          annotation.created_at = self._convert_to_utc(creation_date.decode("utf-8"))
+          annotation.created_at = _convert_to_utc(creation_date.decode("utf-8"))
         if updated_date is not None:
-          annotation.updated_at = self._convert_to_utc(updated_date.decode("utf-8"))
+          annotation.updated_at = _convert_to_utc(updated_date.decode("utf-8"))
 
       if annotation.title is not None or \
           annotation.content is not None or \
@@ -205,18 +184,6 @@ class PdfExtractor:
       return None
     else:
       return "\n".join(lines)
-
-  def _convert_to_utc(self, timestamp: str):
-    pattern = r"D:(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})([\+\-]\d{2})'(\d{2})"
-    match = re.match(pattern, timestamp)
-    if match:
-        year, month, day, hour, minute, second, timezone_offset_hour, timezone_offset_minute = match.groups()
-        dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
-        utc_offset = timedelta(hours=int(timezone_offset_hour), minutes=int(timezone_offset_minute))
-        dt_adjusted = dt - utc_offset
-        return dt_adjusted.strftime("%Y-%m-%d %H:%M:%S")
-    else:
-        return None
 
   def _standardize_text(self, input_str: str) -> str:
     buffer = io.StringIO()
@@ -267,3 +234,49 @@ class PdfExtractor:
       quad_points=json_data.get("quadPoints", None),
       extracted_text=json_data.get("extractedText", None),
     )
+
+class _AnnotationPolygon:
+  def __init__(self, quad_points: list[float]):
+    self._polygons: list[Polygon] = []
+    for i in range(int(len(quad_points) / 8)):
+      x0 = float("inf")
+      x1 = -float("inf")
+      y0 = float("inf")
+      y1 = -float("inf")
+      for j in range(4):
+        index = i*8 + j*2
+        x = quad_points[index]
+        y = quad_points[index + 1]
+        x0 = min(x0, x)
+        x1 = max(x1, x)
+        y0 = min(y0, y)
+        y1 = max(y1, y)
+      polygon = Polygon(((x0, y0), (x1, y0), (x1, y1), (x0, y1)))
+      if polygon.is_valid:
+        self._polygons.append(polygon)
+
+  @property
+  def is_valid(self) -> bool:
+    return len(self._polygons) > 0
+
+  def intersects(self, x0: float, y0: float, x1: float, y1: float) -> bool:
+    target_polygon = Polygon(((x0, y0), (x1, y0), (x1, y1), (x0, y1)))
+    for polygon in self._polygons:
+      if polygon.overlaps(target_polygon):
+        return True
+    return False
+
+  def contains(self, x0: float, y0: float, x1: float, y1: float) -> bool:
+    # make target smaller to be contained
+    rate = 0.01
+    center_x = (x0 + x1) / 2.0
+    center_y = (y0 + y1) / 2.0
+    x0 += (center_x - x0) * rate
+    y0 += (center_y - y0) * rate
+    x1 += (center_x - x1) * rate
+    y1 += (center_y - y1) * rate
+    target_polygon = Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+    for polygon in self._polygons:
+      if polygon.contains(target_polygon):
+        return True
+    return False

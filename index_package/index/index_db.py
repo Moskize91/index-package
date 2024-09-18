@@ -1,3 +1,4 @@
+from typing import Callable
 from .types import IndexNode, IndexNodeMatching
 from .fts5_db import FTS5DB
 from .vector_db import VectorDB, Embedding
@@ -67,7 +68,6 @@ class IndexDB:
 
   def _do_closing_of_matched_nodes(self, query_embedding: Embedding, nodes: list[IndexNode]) -> list[IndexNode]:
     for node in nodes:
-      # TODO: 此步骤需要确保 segments 只有匹配的，这需要将 highlight 的逻辑前置到 fts5 query 中
       segments: list[tuple[str, int]] = []
       for i, _ in enumerate(node.segments):
         segments.append((node.id, i))

@@ -9,15 +9,21 @@ import pikepdf
 from typing import cast, Optional, Callable
 from dataclasses import dataclass
 
-from .pdf_extractor import PdfExtractor, Annotation
+from .pdf_extractor import extract_metadata_with_pdf, PdfExtractor, Annotation
 from ..progress import Progress
 from ..utils import hash_sha512, TempFolderHub
 
 @dataclass
 class Pdf:
   hash: str
-  meta: dict[str, str]
+  metadata: PdfMetadata
   pages: list[PdfPage]
+
+@dataclass
+class PdfMetadata:
+  author: Optional[str]
+  modified_at: Optional[str]
+  producer: Optional[str]
 
 class PdfPage:
   def __init__(self, parent, pdf_id: int, index: int, hash: str):
@@ -130,14 +136,14 @@ class PdfParser:
     row = self._cursor.fetchone()
 
     if row is None:
-      pdf_id, meta = self._create_and_split_pdf(hash, file_path, progress)
+      pdf_id, metadata = self._create_and_split_pdf(hash, file_path, progress)
     else:
       pdf_id, meta_json = row
-      meta = json.loads(meta_json)
+      metadata = PdfMetadata(**json.loads(meta_json))
 
     return Pdf(
       hash=hash,
-      meta=meta,
+      metadata=metadata,
       pages=self._all_pages(pdf_id),
     )
 
@@ -155,11 +161,11 @@ class PdfParser:
       raise ValueError(f"pdf_id {pdf_id} not found")
 
     hash, meta_json = row
-    meta = json.loads(meta_json)
+    metadata = PdfMetadata(**json.loads(meta_json))
 
     return Pdf(
       hash=hash,
-      meta=meta,
+      metadata=metadata,
       pages=self._all_pages(pdf_id),
     )
 
@@ -179,13 +185,12 @@ class PdfParser:
 
     return pdf_pages
 
-  def _create_and_split_pdf(self, hash: str, file_path: str, progress: Optional[Progress]) -> tuple[int, dict]:
-    # TODO: read MetaData from PDF file
-    meta: dict = {}
-    meta_json = json.dumps(meta)
+  def _create_and_split_pdf(self, hash: str, file_path: str, progress: Optional[Progress]) -> tuple[int, PdfMetadata]:
+    metadata = PdfMetadata(**extract_metadata_with_pdf(file_path))
+    metadata_json = json.dumps(metadata.__dict__)
     try:
       self._cursor.execute("BEGIN TRANSACTION")
-      self._cursor.execute("INSERT INTO pdfs (hash, meta) VALUES (?, ?)", (hash, meta_json))
+      self._cursor.execute("INSERT INTO pdfs (hash, meta) VALUES (?, ?)", (hash, metadata_json))
       pdf_id = cast(int, self._cursor.lastrowid)
 
       added_page_hashes: list[str] = []
@@ -208,7 +213,7 @@ class PdfParser:
           progress.complete_handle_pdf_page(i, pages_count)
 
       self._conn.commit()
-      return pdf_id, meta
+      return pdf_id, metadata
 
     except Exception as e:
       self._conn.rollback()
