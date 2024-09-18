@@ -50,7 +50,7 @@ class IndexDB:
 
     part_matched_nodes.sort(key=lambda node: -node.rank)
     similarity_nodes: list[IndexNode] = []
-    nodes = self._vector_db.query(
+    embedding, nodes = self._vector_db.query(
       query,
       matching=IndexNodeMatching.Similarity,
       results_limit=results_limit,
