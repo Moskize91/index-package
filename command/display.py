@@ -5,7 +5,7 @@ from termcolor import colored
 from termcolor._types import Color
 from index_package import PageHighlightSegment, QueryResult
 
-def show_items(text: str, query_result: QueryResult):
+def show_items(query_result: QueryResult):
   # command will see the bottom item first
   pages = query_result.page_items
   pages.reverse()
@@ -31,14 +31,13 @@ def show_items(text: str, query_result: QueryResult):
       print(f"Found Annotations: {len(page.annotations)}")
 
     print(f"Distance: {page.distance}")
+    print(colored(_split_str("-"), "dark_grey"))
 
-    if len(page.segments) > 0:
-      print(colored(_split_str("-"), "dark_grey"))
-      items_count += len(page.segments)
-      print(_highlight_text(
-        text=page.content,
-        segments=page.segments
-      ))
+    items_count += len(page.segments)
+    print(_highlight_text(
+      text=page.content,
+      segments=page.segments
+    ))
 
     if len(page.annotations) > 0:
       print(colored(_split_str("-"), "dark_grey"))
