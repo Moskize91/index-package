@@ -7,7 +7,7 @@ from ..index import Index, IndexNode, IndexNodeMatching
 @dataclass
 class PageQueryItem:
   pdf_files: list[PagePDFFile]
-  rank: float
+  distance: float
   content: str
   segments: list[PageHighlightSegment]
   annotations: list[PageAnnoQueryItem]
@@ -20,7 +20,7 @@ class PagePDFFile:
 @dataclass
 class PageAnnoQueryItem:
   index: int
-  rank: float
+  distance: float
   content: str
   segments: list[PageHighlightSegment]
 
@@ -51,7 +51,7 @@ def trim_nodes(keywords: list[str], index: Index, pdf_parser: PdfParser, nodes: 
       if anno_content is not None and query_item is not None:
         anno_item = PageAnnoQueryItem(
           index=page_index,
-          rank=node.rank,
+          distance=node.vector_distance,
           content=anno_content,
           segments=[],
         )
@@ -66,7 +66,7 @@ def trim_nodes(keywords: list[str], index: Index, pdf_parser: PdfParser, nodes: 
       content = page.snapshot
       query_item = PageQueryItem(
         pdf_files=[],
-        rank=node.rank,
+        distance=node.vector_distance,
         content=content,
         annotations=[],
         segments=highlight_marker.mark(

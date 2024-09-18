@@ -80,7 +80,8 @@ class TestIndex(unittest.TestCase):
       ],
       metadata={},
     )
-    _, nodes = db.query("the transference in the here and now are the core of the analytic work.", results_limit=1)
+    query_embedding = db.encode_embedding("the transference in the here and now are the core of the analytic work.")
+    nodes = db.query(query_embedding, results_limit=1)
     self.assertEqual(len(nodes), 1)
     node = nodes[0]
     self.assertEqual(node.id, "index/db/id1")
@@ -130,8 +131,8 @@ class TestIndex(unittest.TestCase):
 
     self.assertEqual(results, [
       ("id1", IndexNodeMatching.Matched),
-      ("id3", IndexNodeMatching.MatchedPartial),
       ("id4", IndexNodeMatching.MatchedPartial),
+      ("id3", IndexNodeMatching.MatchedPartial),
       ("id5", IndexNodeMatching.MatchedPartial),
       ("id2", IndexNodeMatching.Similarity),
     ])

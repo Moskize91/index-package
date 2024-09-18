@@ -11,7 +11,8 @@ class IndexNode:
   id: str
   matching: IndexNodeMatching
   metadata: dict
-  rank: float
+  fts5_rank: float
+  vector_distance: float
   segments: list[tuple[int, int]]
 
 @dataclass

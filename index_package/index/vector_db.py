@@ -1,7 +1,7 @@
 import re
 
 from typing import cast, Any, Optional, Callable, Literal
-from numpy import ndarray
+from numpy import ndarray, array
 from numpy.typing import ArrayLike
 from sentence_transformers import SentenceTransformer
 from chromadb import PersistentClient
@@ -39,30 +39,33 @@ class VectorDB:
       metadata={"hnsw:space": distance_space},
     )
 
+  def encode_embedding(self, text: str) -> Embedding:
+    return self._embedding_encode([text])[0]
+
   # segment is a tuple of (node_id, index)
   def distances(self, query_embedding: Embedding, segments: list[tuple[str, int]]) -> list[float]:
     ids: list[ID] = []
     for node_id, index in segments:
       ids.append(f"{node_id}/{index}")
 
+    query_np_array = array(query_embedding)
     result = self._db.get(ids=ids, include=[IncludeEnum.embeddings])
     distances: list[float] = []
 
     for embedding in cast(list[Embedding], result["embeddings"]):
-      distance = self._distance_fn(query_embedding, embedding)
+      distance = self._distance_fn(query_np_array, array(embedding))
       distances.append(distance)
 
     return distances
 
   def query(
     self,
-    query_text: str,
+    query_embedding: Embedding,
     results_limit: int,
     matching: IndexNodeMatching = IndexNodeMatching.Similarity,
-  ) -> tuple[Embedding, list[IndexNode]]:
-    query_embeddings = self._embedding_encode([query_text])
+  ) -> list[IndexNode]:
     result = self._db.query(
-      query_embeddings=query_embeddings,
+      query_embeddings=query_embedding,
       n_results=results_limit,
       include=[IncludeEnum.metadatas, IncludeEnum.distances],
     )
@@ -102,12 +105,13 @@ class VectorDB:
         id=node_id,
         matching=matching,
         metadata=node_metadata,
-        rank=min_distance,
+        fts5_rank=0.0,
+        vector_distance=min_distance,
         segments=node_segments,
       ))
-    nodes.sort(key=lambda node: node.rank)
+    nodes.sort(key=lambda node: node.vector_distance)
 
-    return query_embeddings[0], nodes
+    return nodes
 
   def save(self, node_id: str, segments: list[Segment], metadata: dict):
     ids: list[ID] = []
