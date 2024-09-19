@@ -1,4 +1,5 @@
 import os
+import threading
 
 from typing import cast, Optional, Callable
 from .service_in_thread import ServiceInThread
@@ -22,6 +23,8 @@ class ServiceScanJob:
     self._create_service: Callable[[], ServiceInThread] = create_service
     self._scan_db_path: str = scan_db_path
     self._progress: Optional[Progress] = progress
+    self._interrupter_lock: threading.Lock = threading.Lock()
+    self._did_interrupted: bool = False
     self._scanner: Scanner = Scanner(
       db_path=scan_db_path,
       sources=self._sources,
@@ -50,7 +53,13 @@ class ServiceScanJob:
     if state == TasksPoolResultState.RaisedException:
       raise RuntimeError("scan failed with Exception")
 
+  # could be called in another thread safely
   def interrupt(self):
+    with self._interrupter_lock:
+      if self._did_interrupted:
+        raise RuntimeError("already interrupted")
+      self._did_interrupted = True
+
     self._pool.interrupt()
 
   def _init_context(self, index: int):
@@ -78,4 +87,3 @@ class ServiceScanJob:
 
     if self._progress is not None:
       self._progress.complete_handle_file(path)
-
