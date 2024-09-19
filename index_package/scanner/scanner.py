@@ -3,6 +3,7 @@ import sqlite3
 
 from dataclasses import dataclass
 from typing import Optional, Generator
+from ..utils import assert_continue
 from .events import scan_events, EventKind, EventTarget, EventParser
 
 @dataclass
@@ -20,6 +21,41 @@ class Scanner:
 
   def event_parser(self) -> EventParser:
     return EventParser(self._connect())
+
+  def _connect(self) -> sqlite3.Connection:
+    is_first_time = not os.path.exists(self._db_path)
+    conn = sqlite3.connect(self._db_path)
+
+    if is_first_time:
+      cursor = conn.cursor()
+      cursor.execute('''
+        CREATE TABLE files (
+          id TEXT PRIMARY KEY,
+          mtime REAL NOT NULL,
+          scope TEXT NOT NULL,
+          children TEXT
+        )
+      ''')
+      cursor.execute('''
+        CREATE TABLE events (
+          id INTEGER PRIMARY KEY,
+          kind INTEGER NOT NULL,
+          target INTEGER NOT NULL,
+          path TEXT NOT NULL,
+          scope TEXT NOT NULL,
+          mtime REAL NOT NULL
+        )
+      ''')
+      # TODO: 需要存储 path，以便 sources 变化时能读取到上一次的数据
+      cursor.execute('''
+        CREATE TABLE scopes (
+          name TEXT PRIMARY KEY
+        )
+      ''')
+      conn.commit()
+      cursor.close()
+
+    return conn
 
   @property
   def events_count(self) -> int:
@@ -68,47 +104,13 @@ class Scanner:
       self._did_sync_scopes = True
 
     while len(next_relative_paths) > 0:
+      assert_continue()
       relative_path = next_relative_paths.pop()
       children = self._scan_and_report(conn, cursor, scope, scan_path, relative_path)
       if children is not None:
         for child in children:
           next_relative_path = os.path.join(relative_path, child)
           next_relative_paths.insert(0, next_relative_path)
-
-  def _connect(self) -> sqlite3.Connection:
-    is_first_time = not os.path.exists(self._db_path)
-    conn = sqlite3.connect(self._db_path)
-
-    if is_first_time:
-      cursor = conn.cursor()
-      cursor.execute('''
-        CREATE TABLE files (
-          id TEXT PRIMARY KEY,
-          mtime REAL NOT NULL,
-          scope TEXT NOT NULL,
-          children TEXT
-        )
-      ''')
-      cursor.execute('''
-        CREATE TABLE events (
-          id INTEGER PRIMARY KEY,
-          kind INTEGER NOT NULL,
-          target INTEGER NOT NULL,
-          path TEXT NOT NULL,
-          scope TEXT NOT NULL,
-          mtime REAL NOT NULL
-        )
-      ''')
-      # TODO: 需要存储 path，以便 sources 变化时能读取到上一次的数据
-      cursor.execute('''
-        CREATE TABLE scopes (
-          name TEXT PRIMARY KEY
-        )
-      ''')
-      conn.commit()
-      cursor.close()
-
-    return conn
 
   def _sync_scopes(
     self,
