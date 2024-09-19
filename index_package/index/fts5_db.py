@@ -125,10 +125,10 @@ class FTS5DB:
   def remove(self, node_id: str):
     try:
       cursor = self._conn.cursor()
-      cursor.execute("BEGIN TRANSACTION")
       cursor.execute("SELECT content_id FROM nodes WHERE node_id = ?", (node_id,))
       row = cursor.fetchone()
       if row is not None:
+        cursor.execute("BEGIN TRANSACTION")
         content_id = row[0]
         cursor.execute("DELETE FROM contents WHERE rowid = ?", (content_id,))
         cursor.execute("DELETE FROM nodes WHERE node_id = ?", (node_id,))

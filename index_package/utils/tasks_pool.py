@@ -1,6 +1,6 @@
 from __future__ import annotations
 from enum import Enum
-from typing import Optional, TypeVar, Generic, Callable
+from typing import cast, Optional, TypeVar, Generic, Callable
 
 import traceback
 import threading
@@ -158,8 +158,8 @@ class InterruptException(Exception):
     super().__init__("Interrupt")
 
 def assert_continue():
-  event = _interrupted_event_val.value
-  if not isinstance(event, threading.Event):
+  if not hasattr(_interrupted_event_val, "value"):
     return
+  event = cast(threading.Event, _interrupted_event_val.value)
   if event.is_set():
     raise InterruptException()
