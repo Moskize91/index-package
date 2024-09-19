@@ -3,7 +3,8 @@ import time
 import shutil
 import unittest
 
-from index_package.scanner import Scanner, EventKind, EventSearcher, EventTarget
+from typing import Generator
+from index_package.scanner import Scanner, EventKind, EventTarget
 from tests.utils import get_temp_path
 
 class TestScanner(unittest.TestCase):
@@ -21,65 +22,66 @@ class TestScanner(unittest.TestCase):
     self._test_delete_recursively(scan_path, scanner)
 
   def _test_insert_files(self, scan_path: str, scanner: Scanner):
-    self.set_file(scan_path, "./foobar", "hello world")
-    self.set_file(scan_path, "./earth/land", "this is a land")
-    self.set_file(scan_path, "./earth/sea", "this is sea")
-    self.set_file(scan_path, "./universe/sun/sun1", "this is sun1")
-    self.set_file(scan_path, "./universe/sun/sun2", "this is sun1")
-    self.set_file(scan_path, "./universe/moon/moon1", "this is moon1")
+    self._set_file(scan_path, "./foobar", "hello world")
+    self._set_file(scan_path, "./earth/land", "this is a land")
+    self._set_file(scan_path, "./earth/sea", "this is sea")
+    self._set_file(scan_path, "./universe/sun/sun1", "this is sun1")
+    self._set_file(scan_path, "./universe/sun/sun2", "this is sun1")
+    self._set_file(scan_path, "./universe/moon/moon1", "this is moon1")
 
-    with scanner.scan() as events:
-      path_list: list[str] = []
-      for event in events:
+    parser = scanner.event_parser()
+    path_list: list[str] = []
+
+    for event_id in scanner.scan():
+      with parser.parse(event_id) as event:
         path_list.append(event.path)
-      path_list.sort()
-      self.assertListEqual(path_list, [
-        "/",
-        "/earth", "/earth/land", "/earth/sea",
-        "/foobar",
-        "/universe", "/universe/moon", "/universe/moon/moon1",
-        "/universe/sun", "/universe/sun/sun1", "/universe/sun/sun2",
-      ])
+
+    parser.close()
+    path_list.sort()
+    self.assertListEqual(path_list, [
+      "/",
+      "/earth", "/earth/land", "/earth/sea",
+      "/foobar",
+      "/universe", "/universe/moon", "/universe/moon/moon1",
+      "/universe/sun", "/universe/sun/sun1", "/universe/sun/sun2",
+    ])
 
   def _test_modify_part_of_files(self, scan_path: str, scanner: Scanner):
-    self.set_file(scan_path, "./foobar", "file is foobar")
-    self.set_file(scan_path, "./universe/moon/moon2", "this is moon2")
-    self.set_file(scan_path, "./universe/moon/moon3", "this is moon3")
-    self.del_file(scan_path, "./universe/sun/sun2")
+    self._set_file(scan_path, "./foobar", "file is foobar")
+    self._set_file(scan_path, "./universe/moon/moon2", "this is moon2")
+    self._set_file(scan_path, "./universe/moon/moon3", "this is moon3")
+    self._del_file(scan_path, "./universe/sun/sun2")
 
-    with scanner.scan() as events:
-      added_path_list, removed_path_list, updated_path_list = self._classify_events(events)
-      self.assertListEqual(added_path_list, [
-        ("/universe/moon/moon2", EventTarget.File),
-        ("/universe/moon/moon3", EventTarget.File),
-      ])
-      self.assertListEqual(updated_path_list, [
-        ("/foobar", EventTarget.File),
-        ("/universe/moon", EventTarget.Directory), # inserted files in it
-        ("/universe/sun", EventTarget.Directory), # removed files in it
-      ])
-      self.assertListEqual(removed_path_list, [
-        ("/universe/sun/sun2", EventTarget.File),
-      ])
+    added_path_list, removed_path_list, updated_path_list = self._scan_and_classify_events(scanner)
+    self.assertListEqual(added_path_list, [
+      ("/universe/moon/moon2", EventTarget.File),
+      ("/universe/moon/moon3", EventTarget.File),
+    ])
+    self.assertListEqual(updated_path_list, [
+      ("/foobar", EventTarget.File),
+      ("/universe/moon", EventTarget.Directory), # inserted files in it
+      ("/universe/sun", EventTarget.Directory), # removed files in it
+    ])
+    self.assertListEqual(removed_path_list, [
+      ("/universe/sun/sun2", EventTarget.File),
+    ])
 
   def _test_delete_recursively(self, scan_path: str, scanner: Scanner):
-    self.del_file(scan_path, "./universe")
-
-    with scanner.scan() as events:
-      added_path_list, removed_path_list, updated_path_list = self._classify_events(events)
-      self.assertListEqual(added_path_list, [])
-      self.assertListEqual(updated_path_list, [
-        ("/", EventTarget.Directory), # removed files in it
-      ])
-      self.assertListEqual(removed_path_list, [
-        ("/universe", EventTarget.Directory),
-        ("/universe/moon", EventTarget.Directory),
-        ("/universe/moon/moon1", EventTarget.File),
-        ("/universe/moon/moon2", EventTarget.File),
-        ("/universe/moon/moon3", EventTarget.File),
-        ("/universe/sun", EventTarget.Directory),
-        ("/universe/sun/sun1", EventTarget.File),
-      ])
+    self._del_file(scan_path, "./universe")
+    added_path_list, removed_path_list, updated_path_list = self._scan_and_classify_events(scanner)
+    self.assertListEqual(added_path_list, [])
+    self.assertListEqual(updated_path_list, [
+      ("/", EventTarget.Directory), # removed files in it
+    ])
+    self.assertListEqual(removed_path_list, [
+      ("/universe", EventTarget.Directory),
+      ("/universe/moon", EventTarget.Directory),
+      ("/universe/moon/moon1", EventTarget.File),
+      ("/universe/moon/moon2", EventTarget.File),
+      ("/universe/moon/moon3", EventTarget.File),
+      ("/universe/sun", EventTarget.Directory),
+      ("/universe/sun/sun1", EventTarget.File),
+    ])
 
   def setup_paths(self) -> tuple[str, str]:
     temp_path = get_temp_path("scanner")
@@ -88,36 +90,39 @@ class TestScanner(unittest.TestCase):
 
     return scan_path, db_path
 
-  def _classify_events(self, events: EventSearcher) -> tuple[
+  def _scan_and_classify_events(self, scanner: Scanner) -> tuple[
     list[tuple[str, EventTarget]],
     list[tuple[str, EventTarget]],
     list[tuple[str, EventTarget]],
   ]:
+    parser = scanner.event_parser()
     added_path_list: list[tuple[str, EventTarget]] = []
     removed_path_list: list[tuple[str, EventTarget]] = []
     updated_path_list: list[tuple[str, EventTarget]] = []
 
-    for event in events:
-      if event.kind == EventKind.Added:
-        added_path_list.append((event.path, event.target))
-      elif event.kind == EventKind.Removed:
-        removed_path_list.append((event.path, event.target))
-      elif event.kind == EventKind.Updated:
-        updated_path_list.append((event.path, event.target))
+    for event_id in scanner.scan():
+      with parser.parse(event_id) as event:
+        if event.kind == EventKind.Added:
+          added_path_list.append((event.path, event.target))
+        elif event.kind == EventKind.Removed:
+          removed_path_list.append((event.path, event.target))
+        elif event.kind == EventKind.Updated:
+          updated_path_list.append((event.path, event.target))
 
+    parser.close()
     for path_list in [added_path_list, removed_path_list, updated_path_list]:
       path_list.sort(key=lambda x: x[0])
 
     return added_path_list, removed_path_list, updated_path_list
 
-  def set_file(self, base_path: str, path: str, content: str):
+  def _set_file(self, base_path: str, path: str, content: str):
     abs_file_path = os.path.join(base_path, path)
     abs_dir_path = os.path.dirname(abs_file_path)
     os.makedirs(abs_dir_path, exist_ok=True)
     with open(abs_file_path, "w", encoding="utf-8") as file:
       file.write(content)
 
-  def del_file(self, base_path: str, path: str):
+  def _del_file(self, base_path: str, path: str):
     abs_file_path = os.path.join(base_path, path)
     if not os.path.exists(abs_file_path):
       return;

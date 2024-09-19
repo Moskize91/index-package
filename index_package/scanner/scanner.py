@@ -2,9 +2,8 @@ import os
 import sqlite3
 
 from dataclasses import dataclass
-from typing import Optional
-
-from .events import EventKind, EventSearcher, EventTarget
+from typing import Optional, Generator
+from .events import scan_events, EventKind, EventTarget, EventParser
 
 @dataclass
 class _File:
@@ -15,28 +14,45 @@ class _File:
 class Scanner:
   def __init__(self, db_path: str, sources: dict[str, str]) -> None:
     self._db_path: str = db_path
+    self._conn: sqlite3.Connection = self._connect()
     self._sources: dict[str, str] = sources
     self._did_sync_scopes = False
 
-  def scan(self) -> EventSearcher:
-    conn = self._connect()
-    cursor = conn.cursor()
+  def event_parser(self) -> EventParser:
+    return EventParser(self._connect())
 
-    for scope, scan_path in self._sources.items():
-      self._scan_scope(conn, cursor, scope, scan_path)
+  @property
+  def events_count(self) -> int:
+    cursor = self._conn.cursor()
+    try:
+      cursor.execute("SELECT COUNT(*) FROM events")
+      row = cursor.fetchone()
+      return row[0]
+    finally:
+      cursor.close
 
-    return EventSearcher(conn, cursor)
+  def scan(self) -> Generator[int, None, None]:
+    cursor = self._conn.cursor()
+    try:
+      for scope, scan_path in self._sources.items():
+        self._scan_scope(self._conn, cursor, scope, scan_path)
+    finally:
+      cursor.close()
 
-  def scan_scope(self, scope: str) -> EventSearcher:
+    return scan_events(self._conn)
+
+  def scan_scope(self, scope: str) -> Generator[int, None, None]:
     scan_path = self._sources.get(scope, None)
     if scan_path is None:
       raise ValueError(f"unregistered scope: {scope}")
 
-    conn = self._connect()
-    cursor = conn.cursor()
-    self._scan_scope(conn, cursor, scope, scan_path)
+    cursor = self._conn.cursor()
+    try:
+      self._scan_scope(self._conn, cursor, scope, scan_path)
+    finally:
+      cursor.close()
 
-    return EventSearcher(conn, cursor)
+    return scan_events(self._conn)
 
   def _scan_scope(
     self,
