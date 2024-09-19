@@ -1,14 +1,14 @@
 import os
 
-from typing import Optional
+from typing import Optional, Callable
 from dataclasses import dataclass
-from .trimmer import trim_nodes, QueryItem, PdfQueryItem, PageQueryItem
-from ..scanner import Scanner
+from .trimmer import trim_nodes, QueryItem
+from ..scanner import Event, Scanner
 from ..parser import PdfParser
 from ..segmentation import Segmentation
 from ..index import Index, VectorDB, FTS5DB
 from ..progress import Progress, ProgressListeners
-from ..utils import ensure_dir, ensure_parent_dir
+from ..utils import ensure_dir, ensure_parent_dir, TasksPool, TasksPoolResultState
 
 @dataclass
 class QueryResult:
@@ -58,16 +58,35 @@ class Service:
       sources=self._sources,
     )
 
-  def scan(self, progress_listeners: ProgressListeners = ProgressListeners()):
+  def scan(
+      self,
+      progress_listeners: ProgressListeners = ProgressListeners(),
+      on_receive_interrupter: Callable[[Callable[[], None]], None] = lambda _: None,
+  ):
     progress = Progress(progress_listeners)
+    pool = TasksPool[Event](
+      max_workers=4,
+      print_error=True,
+      on_handle=lambda e: self._handle_scan_event(e, progress),
+    )
     with self._scanner.scan() as events:
       progress.start_scan(events.count)
+      if on_receive_interrupter is not None:
+        on_receive_interrupter(pool.interrupt)
       for event in events:
-        path = os.path.join(self._sources[event.scope], f".{event.path}")
-        path = os.path.abspath(path)
-        progress.start_handle_file(path)
-        self._index.handle_event(event, progress)
-        progress.complete_handle_file(path)
+        success = pool.push(event)
+        if not success:
+          break
+    state = pool.complete()
+    if state == TasksPoolResultState.RaisedException:
+      raise RuntimeError("scan failed with Exception")
+
+  def _handle_scan_event(self, event: Event, progress: Progress):
+    path = os.path.join(self._sources[event.scope], f".{event.path}")
+    path = os.path.abspath(path)
+    progress.start_handle_file(path)
+    self._index.handle_event(event, progress)
+    progress.complete_handle_file(path)
 
   def query(self, text: str, results_limit: Optional[int]) -> QueryResult:
     nodes, keywords = self._index.query(text, results_limit)
