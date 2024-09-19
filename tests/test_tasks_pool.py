@@ -24,7 +24,7 @@ class TestTasksPool(unittest.TestCase):
     count = _SafeInt(0)
     pool = TasksPool[int](
       max_workers=4,
-      on_handle=lambda x: count.inc(x),
+      on_handle=lambda x, _: count.inc(x),
     )
     pool = pool.start()
     main_count = 0
@@ -59,7 +59,7 @@ class TestTasksPool(unittest.TestCase):
     self.assertEqual(inserted_integers, [0, 1])
     self.assertEqual(state, TasksPoolResultState.RaisedException)
 
-  def _crash_handler(self, _: int):
+  def _crash_handler(self, _: int, _2: int):
     time.sleep(0.3) # make sure not interrupting another task
     raise Exception("Task failed")
 
@@ -86,7 +86,7 @@ class TestTasksPool(unittest.TestCase):
     self.assertEqual(inserted_integers, [0, 1, 2, 3, 4])
     self.assertEqual(state, TasksPoolResultState.Interrupted)
 
-  def _will_sleep(self, integer: int):
+  def _will_sleep(self, integer: int, _: int):
     if integer >= 3:
       time.sleep(0.3)
 
@@ -117,7 +117,7 @@ class TestTasksPool(unittest.TestCase):
     time.sleep(0.2)
     pool.interrupt()
 
-  def _can_only_be_interrupted(self, integer: int):
+  def _can_only_be_interrupted(self, integer: int, _: int):
     if integer >= 3:
       while True:
         time.sleep(0.025)

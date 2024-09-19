@@ -13,6 +13,7 @@ class Segment:
   end: int
   text: str
 
+# TODO: 作为全局唯一并且线程安全
 class Segmentation:
 
   # https://spacy.io/

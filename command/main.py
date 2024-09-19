@@ -64,7 +64,7 @@ def main():
     )
     if args.scan == True:
       listeners = _create_progress_listeners()
-      service.scan(listeners)
+      service.scan_job(progress_listeners=listeners).start()
     else:
       text = " ".join(args.text)
       if len(text) == 0:
