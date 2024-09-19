@@ -2,9 +2,9 @@ import os
 import sqlite3
 
 from dataclasses import dataclass
-from typing import Optional
-
-from .events import EventKind, EventSearcher, EventTarget
+from typing import Optional, Generator
+from ..utils import assert_continue
+from .events import scan_events, EventKind, EventTarget, EventParser
 
 @dataclass
 class _File:
@@ -15,49 +15,12 @@ class _File:
 class Scanner:
   def __init__(self, db_path: str, sources: dict[str, str]) -> None:
     self._db_path: str = db_path
+    self._conn: sqlite3.Connection = self._connect()
     self._sources: dict[str, str] = sources
     self._did_sync_scopes = False
 
-  def scan(self) -> EventSearcher:
-    conn = self._connect()
-    cursor = conn.cursor()
-
-    for scope, scan_path in self._sources.items():
-      self._scan_scope(conn, cursor, scope, scan_path)
-
-    return EventSearcher(conn, cursor)
-
-  def scan_scope(self, scope: str) -> EventSearcher:
-    scan_path = self._sources.get(scope, None)
-    if scan_path is None:
-      raise ValueError(f"unregistered scope: {scope}")
-
-    conn = self._connect()
-    cursor = conn.cursor()
-    self._scan_scope(conn, cursor, scope, scan_path)
-
-    return EventSearcher(conn, cursor)
-
-  def _scan_scope(
-    self,
-    conn: sqlite3.Connection,
-    cursor: sqlite3.Cursor,
-    scope: str,
-    scan_path: str,
-  ):
-    next_relative_paths: list[str] = ["/"]
-
-    if not self._did_sync_scopes:
-      self._sync_scopes(conn, cursor)
-      self._did_sync_scopes = True
-
-    while len(next_relative_paths) > 0:
-      relative_path = next_relative_paths.pop()
-      children = self._scan_and_report(conn, cursor, scope, scan_path, relative_path)
-      if children is not None:
-        for child in children:
-          next_relative_path = os.path.join(relative_path, child)
-          next_relative_paths.insert(0, next_relative_path)
+  def event_parser(self) -> EventParser:
+    return EventParser(self._connect())
 
   def _connect(self) -> sqlite3.Connection:
     is_first_time = not os.path.exists(self._db_path)
@@ -93,6 +56,61 @@ class Scanner:
       cursor.close()
 
     return conn
+
+  @property
+  def events_count(self) -> int:
+    cursor = self._conn.cursor()
+    try:
+      cursor.execute("SELECT COUNT(*) FROM events")
+      row = cursor.fetchone()
+      return row[0]
+    finally:
+      cursor.close
+
+  def scan(self) -> Generator[int, None, None]:
+    cursor = self._conn.cursor()
+    try:
+      for scope, scan_path in self._sources.items():
+        self._scan_scope(self._conn, cursor, scope, scan_path)
+    finally:
+      cursor.close()
+
+    return scan_events(self._conn)
+
+  def scan_scope(self, scope: str) -> Generator[int, None, None]:
+    scan_path = self._sources.get(scope, None)
+    if scan_path is None:
+      raise ValueError(f"unregistered scope: {scope}")
+
+    cursor = self._conn.cursor()
+    try:
+      self._scan_scope(self._conn, cursor, scope, scan_path)
+    finally:
+      cursor.close()
+
+    return scan_events(self._conn)
+
+  def _scan_scope(
+    self,
+    conn: sqlite3.Connection,
+    cursor: sqlite3.Cursor,
+    scope: str,
+    scan_path: str,
+  ):
+    next_relative_paths: list[str] = ["/"]
+
+    if not self._did_sync_scopes:
+      self._sync_scopes(conn, cursor)
+      self._did_sync_scopes = True
+
+    while len(next_relative_paths) > 0:
+      assert_continue()
+      relative_path = next_relative_paths.pop()
+      children = self._scan_and_report(conn, cursor, scope, scan_path, relative_path)
+      if children is not None:
+        for child in children:
+          next_relative_path = os.path.join(relative_path, child)
+          next_relative_paths.insert(0, next_relative_path)
 
   def _sync_scopes(
     self,

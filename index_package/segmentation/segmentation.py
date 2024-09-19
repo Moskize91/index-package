@@ -1,6 +1,8 @@
 import spacy
 import langid
+import threading
 
+from typing import Optional
 from dataclasses import dataclass
 from spacy.language import Language
 from spacy.tokens import Doc
@@ -13,11 +15,12 @@ class Segment:
   end: int
   text: str
 
-# TODO: 作为全局唯一并且线程安全
+# Thread safety
 class Segmentation:
 
   # https://spacy.io/
   def __init__(self) -> None:
+    self._lock: threading.Lock = threading.Lock()
     self._nlp_dict: dict[str, Language] = {}
     self._lan2model: dict = {
       "en": "en_core_web_sm",
@@ -51,17 +54,17 @@ class Segmentation:
     return keywords
 
   def _nlp(self, lan: str) -> Language:
-    nlp = self._nlp_dict.get(lan, None)
-    if nlp is None:
-      model_id = self._lan2model.get(lan, None)
-      if model_id is None:
-        model_id = self._lan2model.get("en", None)
+    with self._lock:
+      nlp = self._nlp_dict.get(lan, None)
+      if nlp is None:
+        model_id = self._lan2model.get(lan, None)
         if model_id is None:
-          raise ValueError("no model found for input text.")
-      nlp = spacy.load(model_id)
-      self._nlp_dict[lan] = nlp
-
-    return nlp
+          model_id = self._lan2model.get("en", None)
+          if model_id is None:
+            raise ValueError("no model found for input text.")
+        nlp = spacy.load(model_id)
+        self._nlp_dict[lan] = nlp
+      return nlp
 
   def _to_sentences(self, nlp: Language, doc: Doc) -> list[_Sentence]:
     sentences: list[_Sentence] = []

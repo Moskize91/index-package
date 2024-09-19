@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from .pdf_extractor import extract_metadata_with_pdf, PdfExtractor, Annotation
 from ..progress import Progress
-from ..utils import hash_sha512, TempFolderHub
+from ..utils import hash_sha512, assert_continue, TempFolderHub, InterruptException
 
 @dataclass
 class Pdf:
@@ -188,12 +188,11 @@ class PdfParser:
   def _create_and_split_pdf(self, hash: str, file_path: str, progress: Optional[Progress]) -> tuple[int, PdfMetadata]:
     metadata = PdfMetadata(**extract_metadata_with_pdf(file_path))
     metadata_json = json.dumps(metadata.__dict__)
+    added_page_hashes: list[str] = []
     try:
       self._cursor.execute("BEGIN TRANSACTION")
       self._cursor.execute("INSERT INTO pdfs (hash, meta) VALUES (?, ?)", (hash, metadata_json))
       pdf_id = cast(int, self._cursor.lastrowid)
-
-      added_page_hashes: list[str] = []
 
       for index, page_hash in enumerate(self._extract_page_hashes(file_path)):
         self._cursor.execute(
@@ -206,6 +205,7 @@ class PdfParser:
           added_page_hashes.append(page_hash)
 
       for i, page_hash in enumerate(added_page_hashes):
+        assert_continue()
         self._extractor.extract_page(page_hash)
         self._listeners.on_page_added(page_hash)
         if progress is not None:
@@ -215,7 +215,9 @@ class PdfParser:
       self._conn.commit()
       return pdf_id, metadata
 
-    except Exception as e:
+    except InterruptException as e:
+      for page_hash in added_page_hashes:
+        self._extractor.remove_page(page_hash)
       self._conn.rollback()
       raise e
 

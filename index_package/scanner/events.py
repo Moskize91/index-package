@@ -1,99 +1,80 @@
 import sqlite3
 
 from enum import Enum
-from dataclasses import dataclass
-from typing import Optional
+from typing import Generator, Optional, Callable
+
+def scan_events(conn: sqlite3.Connection) -> Generator[int, None, None]:
+  cursor = conn.cursor()
+  try:
+    cursor.execute("SELECT id FROM events ORDER BY id")
+    for row in cursor.fetchmany(size=45):
+      yield row[0]
+  finally:
+    cursor.close()
+
+class EventKind(Enum):
+  Added = 0
+  Updated = 1
+  Removed = 2
 
 class EventTarget(Enum):
   File = 0
   Directory = 1
 
-class EventKind(Enum):
-    Added = 0
-    Updated = 1
-    Removed = 2
-
-@dataclass
 class Event:
-  id: int
-  kind: EventKind
-  target: EventTarget
-  scope: str
-  path: str
-  mtime: float
-
-class EventSearcher:
   def __init__(
     self,
-    conn: sqlite3.Connection,
-    cursor: sqlite3.Cursor,
-  ) -> None:
-    self._conn: sqlite3.Connection = conn
-    self._cursor: sqlite3.Cursor = cursor
-    self._events: Optional[list[Event]] = None
-    self._did_completed = False
-    self._cursor.execute("SELECT COUNT(*) FROM events")
-    self._count: int = self._cursor.fetchone()[0]
-
-  @property
-  def count(self) -> int:
-    return self._count
+    id: int,
+    kind: EventKind,
+    target: EventTarget,
+    scope: str,
+    path: str,
+    mtime: float,
+    on_exit: Optional[Callable[[], None]] = None,
+  ):
+    self.id: int = id
+    self.kind: EventKind = kind
+    self.target: EventTarget = target
+    self.scope: str = scope
+    self.path: str = path
+    self.mtime: float = mtime
+    self._on_exit: Optional[Callable[[], None]] = on_exit
 
   def __enter__(self):
     return self
 
   def __exit__(self, exc_type, exc_value, traceback):
-    if self._events is not None:
-      latest_id = self._events[-1].id
-      self._cursor.execute("DELETE FROM events WHERE id < ?", (latest_id,))
-      self._events = None
+    if exc_type is None and self._on_exit is not None:
+      self._on_exit()
 
-    self._cursor.close()
-    self._conn.commit()
-    self._conn.close()
-    return False
+class EventParser:
+  def __init__(self, conn: sqlite3.Connection):
+    self._conn: sqlite3.Connection = conn
+    self._cursor = self._conn.cursor()
 
-  def __iter__(self):
-    return self
-
-  def __next__(self) -> Event:
-    if self._did_completed:
-      raise StopIteration
-
-    if self._events is None:
-      self._events = self._fetch_events_group()
-      if self._events is None:
-        self._did_completed = True
-        raise StopIteration
-
-    event = self._events.pop()
-
-    if len(self._events) == 0:
-      self._events = None
-      self._cursor.execute("DELETE FROM events WHERE id <= ?", (event.id,))
-      self._conn.commit()
-
-    self._count -= 1
-    return event
-
-  def _fetch_events_group(self) -> Optional[list[Event]]:
-    group_size = 45
-    row = self._cursor.execute(
-      "SELECT id, kind, target, path, scope, mtime FROM events ORDER BY id LIMIT ?", (group_size,),
+  def parse(self, event_id: int) -> Event:
+    self._cursor.execute(
+      "SELECT kind, target, path, scope, mtime FROM events WHERE id = ?",
+      (event_id,)
     )
-    rows = row.fetchall()
-    if len(rows) == 0:
-      return None
+    row = self._cursor.fetchone()
+    if row is None:
+      raise Exception(f"Event not found: {event_id}")
 
-    events: list[Event] = []
-    for row in rows:
-      events.append(Event(
-        id=row[0],
-        kind=EventKind(row[1]),
-        target=EventTarget(row[2]),
-        path=row[3],
-        scope=row[4],
-        mtime=row[5],
-      ))
-    events.reverse()
-    return events
+    return Event(
+      id=event_id,
+      kind=EventKind(row[0]),
+      target=EventTarget(row[1]),
+      path=row[2],
+      scope=row[3],
+      mtime=row[4],
+      on_exit=lambda: self._remove_event(event_id),
+    )
+
+  def close(self):
+    self._cursor.close()
+    self._conn.close()
+
+  def _remove_event(self, event_id: int):
+    self._cursor.execute("DELETE FROM events WHERE id = ?", (event_id,))
+    self._conn.commit()

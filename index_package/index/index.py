@@ -14,7 +14,7 @@ from ..parser import PdfParser, PdfMetadata, PdfPage
 from ..scanner import Event, EventKind, EventTarget
 from ..segmentation import Segment, Segmentation
 from ..progress import Progress
-from ..utils import hash_sha512, ensure_parent_dir, is_empty_string
+from ..utils import hash_sha512, ensure_parent_dir, is_empty_string, assert_continue, InterruptException
 
 class Index:
   def __init__(
@@ -33,7 +33,6 @@ class Index:
     self._conn: sqlite3.Connection = self._connect(
       ensure_parent_dir(os.path.join(index_dir_path, "index.sqlite3"))
     )
-    self._cursor: sqlite3.Cursor = self._conn.cursor()
 
   def _connect(self, db_path: str) -> sqlite3.Connection:
     is_first_time = not os.path.exists(db_path)
@@ -74,10 +73,11 @@ class Index:
     return conn
 
   def get_paths(self, file_hash: str) -> list[str]:
-    self._cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (file_hash,))
+    cursor = self._conn.cursor()
+    cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (file_hash,))
     paths: list[str] = []
 
-    for row in self._cursor.fetchall():
+    for row in cursor.fetchall():
       scope, path = row
       scope_path = self._get_abs_path(scope, path)
       if scope_path is not None:
@@ -86,17 +86,18 @@ class Index:
     return paths
 
   def get_page_relative_to_pdf(self, page_hash: str) -> list[PageRelativeToPDF]:
-    self._cursor.execute("SELECT pdf_hash, page_index FROM pages WHERE hash = ?", (page_hash,))
+    cursor = self._conn.cursor()
+    cursor.execute("SELECT pdf_hash, page_index FROM pages WHERE hash = ?", (page_hash,))
     page_infos: list[tuple[str, int]] = []
     pages: list[PageRelativeToPDF] = []
 
-    for row in self._cursor.fetchall():
+    for row in cursor.fetchall():
       pdf_hash, page_index = row
       page_infos.append((pdf_hash, page_index))
 
     for pdf_hash, page_index in page_infos:
-      self._cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (pdf_hash,))
-      for row in self._cursor.fetchall():
+      cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (pdf_hash,))
+      for row in cursor.fetchall():
         scope, path = row
         scope_path = self._get_abs_path(scope, path)
         if scope_path is not None:
@@ -143,52 +144,33 @@ class Index:
     if path is None:
       return
 
-    self._cursor.execute("SELECT id, hash FROM files WHERE scope = ? AND path = ?", (event.scope, event.path,))
-    row = self._cursor.fetchone()
-    new_hash: Optional[str] = None
-    origin: Optional[tuple[int, str]] = None
-    did_update = False
+    try:
+      cursor = self._conn.cursor()
+      cursor.execute("BEGIN TRANSACTION")
+      new_hash, origin_id_hash = self._update_file_with_event(cursor, path, event)
 
-    if row is not None:
-      id, hash = row
-      origin = (id, hash)
+      # process that commit new pages is breakable.
+      # we need to commit added records of index first, so we can rollback the transaction.
+      # if we commit deleted records of index, we can't rollback the transaction.
+      if new_hash is not None:
+        cursor.execute("SELECT COUNT(*) FROM files WHERE hash = ?", (new_hash,))
+        num_rows = cursor.fetchone()[0]
+        if num_rows == 1:
+          self._handle_found_pdf_hash(cursor, new_hash, path, progress)
 
-    if event.kind != EventKind.Removed:
-      new_hash = hash_sha512(path)
-      if origin is None:
-        self._cursor.execute(
-          "INSERT INTO files (type, scope, path, hash) VALUES (?, ?, ?, ?)",
-          ("pdf", event.scope, event.path, new_hash),
-        )
-        self._conn.commit()
-        did_update = True
-      else:
-        origin_id, origin_hash = origin
-        if new_hash != origin_hash:
-          self._cursor.execute("UPDATE files SET hash = ? WHERE id = ?", (new_hash, origin_id,))
-          self._conn.commit()
-          did_update = True
+      # process that commit deleted pages is not breakable.
+      if origin_id_hash is not None:
+        _, origin_hash = origin_id_hash
+        cursor.execute("SELECT * FROM files WHERE hash = ? LIMIT 1", (origin_hash,))
+        if cursor.fetchone() is None:
+          self._handle_lost_pdf_hash(cursor, origin_hash)
 
-    elif origin is not None:
-      origin_id, _ = origin
-      self._cursor.execute("DELETE FROM files WHERE id = ?", (origin_id,))
       self._conn.commit()
-      did_update = True
+      cursor.close()
 
-    if not did_update:
-      return
-
-    if new_hash is not None:
-      self._cursor.execute("SELECT COUNT(*) FROM files WHERE hash = ?", (new_hash,))
-      num_rows = self._cursor.fetchone()[0]
-      if num_rows == 1:
-        self._handle_found_pdf_hash(new_hash, path, progress)
-
-    if origin is not None:
-      _, origin_hash = origin
-      self._cursor.execute("SELECT * FROM files WHERE hash = ? LIMIT 1", (origin_hash,))
-      if self._cursor.fetchone() is None:
-        self._handle_lost_pdf_hash(origin_hash)
+    except Exception as e:
+      self._conn.rollback()
+      raise e
 
   def _filter_and_get_abspath(self, event: Event) -> Optional[str]:
     if event.target == EventTarget.Directory:
@@ -207,42 +189,86 @@ class Index:
 
     return path
 
-  def _handle_found_pdf_hash(self, hash: str, path: str, progress: Optional[Progress]):
+  def _update_file_with_event(self, cursor: sqlite3.Cursor, path: str, event: Event) -> tuple[Optional[str], Optional[tuple[int, str]]]:
+    row = cursor.fetchone()
+    new_hash: Optional[str] = None
+    origin_id_hash: Optional[tuple[int, str]] = None
+    did_update = False
+
+    if row is not None:
+      id, hash = row
+      origin_id_hash = (id, hash)
+
+    if event.kind != EventKind.Removed:
+      new_hash = hash_sha512(path)
+      if origin_id_hash is None:
+        cursor.execute(
+          "INSERT INTO files (type, scope, path, hash) VALUES (?, ?, ?, ?)",
+          ("pdf", event.scope, event.path, new_hash),
+        )
+        did_update = True
+      else:
+        origin_id, origin_hash = origin_id_hash
+        if new_hash != origin_hash:
+          cursor.execute("UPDATE files SET hash = ? WHERE id = ?", (new_hash, origin_id,))
+          did_update = True
+
+    elif origin_id_hash is not None:
+      origin_id, _ = origin_id_hash
+      cursor.execute("DELETE FROM files WHERE id = ?", (origin_id,))
+      did_update = True
+
+    if not did_update:
+      return None, None
+
+    return new_hash, origin_id_hash
+
+  def _handle_found_pdf_hash(self, cursor: sqlite3.Cursor, hash: str, path: str, progress: Optional[Progress]):
     pdf = self._pdf_parser.pdf(hash, path, progress)
     for page in pdf.pages:
-      self._cursor.execute(
+      cursor.execute(
         "INSERT INTO pages (pdf_hash, page_index, hash) VALUES (?, ?, ?)",
         (hash, page.index, page.hash),
       )
-    self._conn.commit()
     self._index_proxy.save(hash, "pdf", self._pdf_metadata_to_document(pdf.metadata))
+    last_added_page_index: int = 0
 
-    for page in pdf.pages:
-      self._cursor.execute("SELECT COUNT(*) FROM pages WHERE hash = ?", (page.hash,))
-      num_rows = self._cursor.fetchone()[0]
-      if num_rows == 1:
-        self._handle_found_page_hash(page)
-      if progress is not None:
-        progress.on_complete_index_pdf_page(page.index, len(pdf.pages))
+    try:
+      for i, page in enumerate(pdf.pages):
+        cursor.execute("SELECT COUNT(*) FROM pages WHERE hash = ?", (page.hash,))
+        num_rows = cursor.fetchone()[0]
+        if num_rows == 1:
+          self._save_page_content_into_index(page)
+          last_added_page_index = i
+          assert_continue()
 
-  def _handle_lost_pdf_hash(self, hash: str):
-    self._cursor.execute(
+        if progress is not None:
+          progress.on_complete_index_pdf_page(page.index, len(pdf.pages))
+
+    except InterruptException as e:
+      self._index_proxy.remove(hash)
+      for i in range(last_added_page_index + 1):
+        page = pdf.pages[i]
+        self._remove_page_content_from_index(page)
+      raise e
+
+  def _handle_lost_pdf_hash(self, cursor: sqlite3.Cursor, hash: str):
+    cursor.execute(
       "SELECT hash FROM pages WHERE pdf_hash = ? ORDER BY page_index", (hash,),
     )
     page_hashes: list[str] = []
-    for row in self._cursor.fetchall():
+    for row in cursor.fetchall():
       page_hashes.append(row[0])
 
-    self._cursor.execute("DELETE FROM pages WHERE pdf_hash = ?", (hash,))
-    self._conn.commit()
+    cursor.execute("DELETE FROM pages WHERE pdf_hash = ?", (hash,))
     self._index_proxy.remove(hash)
 
     for page_hash in page_hashes:
-      self._cursor.execute("SELECT * FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
-      if self._cursor.fetchone() is None:
+      cursor.execute("SELECT * FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
+      if cursor.fetchone() is None:
         page = self._pdf_parser.page(page_hash)
         if page is not None:
-          self._handle_lost_page_hash(page)
+          self._remove_page_content_from_index(page)
 
     self._pdf_parser.fire_file_removed(hash)
 
@@ -256,7 +282,7 @@ class Index:
       buffer.write(f"Producer: {metadata.producer}\n")
     return buffer.getvalue()
 
-  def _handle_found_page_hash(self, page: PdfPage):
+  def _save_page_content_into_index(self, page: PdfPage):
     self._index_proxy.save(
       id=page.hash,
       type="pdf.page",
@@ -276,7 +302,7 @@ class Index:
           text=annotation.extracted_text,
         )
 
-  def _handle_lost_page_hash(self, page: PdfPage):
+  def _remove_page_content_from_index(self, page: PdfPage):
     for index in range(len(page.annotations)):
       self._index_proxy.remove(f"{page.hash}/anno/{index}/content")
       self._index_proxy.remove(f"{page.hash}/anno/{index}/extracted")
