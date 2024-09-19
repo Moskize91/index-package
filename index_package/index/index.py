@@ -246,6 +246,7 @@ class Index:
           progress.on_complete_index_pdf_page(page.index, len(pdf.pages))
 
     except InterruptException as e:
+      self._index_proxy.remove(hash)
       for i in range(last_added_page_index + 1):
         page = pdf.pages[i]
         self._remove_page_content_from_index(page)

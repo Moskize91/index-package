@@ -1,4 +1,6 @@
 import os
+import signal
+import sys
 import json
 import argparse
 import shutil
@@ -6,7 +8,7 @@ import shutil
 from dataclasses import dataclass
 from typing import Any
 from tqdm import tqdm
-from index_package import Service, ProgressListeners
+from index_package import Service, ServiceScanJob, ProgressListeners
 from command.display import show_items
 
 def main():
@@ -64,7 +66,13 @@ def main():
     )
     if args.scan == True:
       listeners = _create_progress_listeners()
-      service.scan_job(progress_listeners=listeners).start()
+      scan_job = service.scan_job(progress_listeners=listeners)
+      signal.signal(
+        signal.SIGINT,
+        lambda sig, frame: _on_handle_signal(scan_job),
+      )
+      scan_job.start()
+
     else:
       text = " ".join(args.text)
       if len(text) == 0:
@@ -77,6 +85,12 @@ def main():
           results_limit=args.limit,
         )
         show_items(query_result)
+
+def _on_handle_signal(scan_job: ServiceScanJob):
+    print("Interrupting...")
+    scan_job.interrupt()
+    print("Complete Interrupted.")
+    sys.exit(0)
 
 def _package_and_path(package_path: str) -> tuple[dict, str]:
   package_path = os.path.join(os.getcwd(), package_path)
