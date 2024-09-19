@@ -20,12 +20,12 @@ class ServiceInThread:
   def __init__(
     self,
     sources: dict[str, str],
-    embedding_model_id: str,
     pdf_parser_cache_path: str,
     pdf_parser_temp_path: str,
     fts5_db_path: str,
-    vector_dir_path: str,
     index_dir_path: str,
+    segmentation: Segmentation,
+    vector_db: VectorDB,
   ):
     self._sources: dict[str, str] = sources
     self._pdf_parser: PdfParser = PdfParser(
@@ -35,13 +35,9 @@ class ServiceInThread:
     self._index: Index = Index(
       pdf_parser=self._pdf_parser,
       fts5_db=FTS5DB(db_path=fts5_db_path),
-      vector_db=VectorDB(
-        embedding_model_id=embedding_model_id,
-        distance_space="l2",
-        index_dir_path=vector_dir_path,
-      ),
+      vector_db=vector_db,
       index_dir_path=index_dir_path,
-      segmentation=Segmentation(),
+      segmentation=segmentation,
       sources=sources,
     )
 
