@@ -75,15 +75,14 @@ class ServiceScanJob:
 
   def _handle_event(self, event_id: int, index: int):
     service, parser = cast(_JobContext, self._job_contexts[index])
-    event = parser.parse(event_id)
+    with parser.parse(event_id) as event:
+      path = os.path.join(self._sources[event.scope], f".{event.path}")
+      path = os.path.abspath(path)
 
-    path = os.path.join(self._sources[event.scope], f".{event.path}")
-    path = os.path.abspath(path)
+      if self._progress is not None:
+        self._progress.start_handle_file(path)
 
-    if self._progress is not None:
-      self._progress.start_handle_file(path)
+      service.handle_event(event, self._progress)
 
-    service.handle_event(event, self._progress)
-
-    if self._progress is not None:
-      self._progress.complete_handle_file(path)
+      if self._progress is not None:
+        self._progress.complete_handle_file(path)
