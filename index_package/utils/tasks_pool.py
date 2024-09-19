@@ -58,13 +58,17 @@ class TasksPool(Generic[E]):
   def __init__(
     self,
     max_workers: int,
-    on_handle: Callable[[E], None],
+    on_handle: Callable[[E, int], None],
+    on_init: Optional[Callable[[int], None]] = None,
+    on_dispose: Optional[Callable[[int, bool], None]] = None,
     print_error: bool = True,
   ):
     self._state: TasksPoolResultState = TasksPoolResultState.Success
     self._state_lock: threading.Lock = threading.Lock()
     self._max_workers = max_workers
-    self._on_handle: Callable[[E], None] = on_handle
+    self._on_handle: Callable[[E, int], None] = on_handle
+    self._on_init: Optional[Callable[[int], None]] = on_init
+    self._on_dispose: Optional[Callable[[int, bool], None]] = on_dispose
     self._print_error: bool = print_error
     self._semaphore_value: _SemaphoreValue[E] = _SemaphoreValue()
     self._threads: list[threading.Thread] = []
@@ -76,8 +80,11 @@ class TasksPool(Generic[E]):
     return self._interrupted_event.is_set()
 
   def start(self) -> TasksPool:
-    for _ in range(self._max_workers):
-      thread = threading.Thread(target=self._start_thread_loop, daemon=True)
+    for index in range(self._max_workers):
+      thread = threading.Thread(
+        target=lambda:self._start_thread_loop(index),
+        daemon=True,
+      )
       self._threads.append(thread)
     for thread in self._threads:
       thread.start()
@@ -110,17 +117,24 @@ class TasksPool(Generic[E]):
     return self._state
 
   # this function is running in daemon thread
-  def _start_thread_loop(self):
+  def _start_thread_loop(self, index: int):
+    success = False
     _interrupted_event_val.value = self._interrupted_event
+
     try:
+      if self._on_init is not None:
+        self._on_init(index)
+
       while True:
         event = self._semaphore_value.get()
         if event is None:
           break
-        self._on_handle(event)
+        self._on_handle(event, index)
 
-        if self._completed_event.is_set() or \
-           self._interrupted_event.is_set():
+        if self._completed_event.is_set():
+          success = True
+          break
+        if self._interrupted_event.is_set():
           break
 
     except InterruptException:
@@ -134,6 +148,10 @@ class TasksPool(Generic[E]):
       if not self._interrupted_event.is_set():
         self._interrupted_event.set()
         self._semaphore_value.release_putter()
+
+    finally:
+      if self._on_dispose is not None:
+        self._on_dispose(index, success)
 
 class InterruptException(Exception):
   def __init__(self):
