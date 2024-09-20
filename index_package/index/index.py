@@ -28,7 +28,7 @@ class Index:
   ):
     self._pdf_parser: PdfParser = pdf_parser
     self._segmentation: Segmentation = segmentation
-    self._index_proxy: _IndexProxy = _IndexProxy(fts5_db, vector_db, segmentation)
+    self._index_db: IndexDB = IndexDB(fts5_db, vector_db)
     self._sources: dict[str, str] = sources
     self._conn: sqlite3.Connection = self._connect(
       ensure_parent_dir(os.path.join(index_dir_path, "index.sqlite3"))
@@ -135,7 +135,7 @@ class Index:
     if is_empty_string(query_text):
       query_nodes = []
     else:
-      query_nodes = self._index_proxy.query(query_text, results_limit)
+      query_nodes = self._index_db.query(query_text, results_limit)
 
     return query_nodes, keywords
 
@@ -230,26 +230,22 @@ class Index:
         "INSERT INTO pages (pdf_hash, page_index, hash) VALUES (?, ?, ?)",
         (hash, page.index, page.hash),
       )
-    self._index_proxy.save(hash, "pdf", self._pdf_metadata_to_document(pdf.metadata))
-    last_added_page_index: int = 0
+    index_context = _IndexContext(self._segmentation, self._index_db)
+    index_context.save(hash, "pdf", self._pdf_metadata_to_document(pdf.metadata))
 
     try:
-      for i, page in enumerate(pdf.pages):
+      for page in pdf.pages:
         cursor.execute("SELECT COUNT(*) FROM pages WHERE hash = ?", (page.hash,))
         num_rows = cursor.fetchone()[0]
         if num_rows == 1:
-          self._save_page_content_into_index(page)
-          last_added_page_index = i
+          self._save_page_content_into_index(index_context, page)
           assert_continue()
 
         if progress is not None:
           progress.on_complete_index_pdf_page(page.index, len(pdf.pages))
 
     except InterruptException as e:
-      self._index_proxy.remove(hash)
-      for i in range(last_added_page_index + 1):
-        page = pdf.pages[i]
-        self._remove_page_content_from_index(page)
+      index_context.rollback()
       raise e
 
   def _handle_lost_pdf_hash(self, cursor: sqlite3.Cursor, hash: str):
@@ -261,14 +257,17 @@ class Index:
       page_hashes.append(row[0])
 
     cursor.execute("DELETE FROM pages WHERE pdf_hash = ?", (hash,))
-    self._index_proxy.remove(hash)
+    self._index_db.remove(hash)
 
     for page_hash in page_hashes:
       cursor.execute("SELECT * FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
       if cursor.fetchone() is None:
         page = self._pdf_parser.page(page_hash)
         if page is not None:
-          self._remove_page_content_from_index(page)
+          for index in range(len(page.annotations)):
+            self._index_db.remove(f"{page.hash}/anno/{index}/content")
+            self._index_db.remove(f"{page.hash}/anno/{index}/extracted")
+          self._index_db.remove(page.hash)
 
     self._pdf_parser.fire_file_removed(hash)
 
@@ -282,43 +281,31 @@ class Index:
       buffer.write(f"Producer: {metadata.producer}\n")
     return buffer.getvalue()
 
-  def _save_page_content_into_index(self, page: PdfPage):
-    self._index_proxy.save(
+  def _save_page_content_into_index(self, index_context: _IndexContext, page: PdfPage):
+    index_context.save(
       id=page.hash,
       type="pdf.page",
       text=page.snapshot,
     )
     for index, annotation in enumerate(page.annotations):
       if annotation.content is not None:
-        self._index_proxy.save(
+        index_context.save(
           id=f"{page.hash}/anno/{index}/content",
           type="pdf.page.anno.content",
           text=annotation.content,
         )
       if annotation.extracted_text is not None:
-        self._index_proxy.save(
+        index_context.save(
           id=f"{page.hash}/anno/{index}/extracted",
           type="pdf.page.anno.extracted",
           text=annotation.extracted_text,
         )
 
-  def _remove_page_content_from_index(self, page: PdfPage):
-    for index in range(len(page.annotations)):
-      self._index_proxy.remove(f"{page.hash}/anno/{index}/content")
-      self._index_proxy.remove(f"{page.hash}/anno/{index}/extracted")
-    self._index_proxy.remove(page.hash)
-
-class _IndexProxy:
-  def __init__(self,
-    fts5_db: FTS5DB,
-    vector_db: VectorDB,
-    segmentation: Segmentation,
-  ):
-    self._index_db: IndexDB = IndexDB(fts5_db, vector_db)
+class _IndexContext:
+  def __init__(self, segmentation: Segmentation, index_db: IndexDB):
     self._segmentation: Segmentation = segmentation
-
-  def query(self, query: str, results_limit: int) -> list[IndexNode]:
-    return self._index_db.query(query, results_limit)
+    self._index_db: IndexDB = index_db
+    self._added_ids: list[str] = []
 
   def save(self, id: str, type: str, text: str, properties: Optional[dict] = None):
     segments: list[Segment] = []
@@ -333,7 +320,11 @@ class _IndexProxy:
     else:
       properties.copy()
       properties["type"] = type
-    self._index_db.save(id, segments, properties)
 
-  def remove(self, id: str):
-    self._index_db.remove(id)
+    self._index_db.save(id, segments, properties)
+    self._added_ids.append(id)
+
+  def rollback(self):
+    for id in self._added_ids:
+      self._index_db.remove(id)
+    self._added_ids.clear()
