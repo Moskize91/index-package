@@ -54,6 +54,9 @@ class Scanner:
             name TEXT PRIMARY KEY
           )
         ''')
+        cursor.execute("""
+          CREATE UNIQUE INDEX idx_events ON events (scope, path, target)
+        """)
         conn.commit()
 
       finally:
