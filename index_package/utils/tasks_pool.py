@@ -96,7 +96,7 @@ class TasksPool(Generic[E]):
       return False
     return self._semaphore_value.put(event)
 
-  # THREAD SAFE: block until all stopped
+  # THREAD SAFE: fire interrupt event
   def interrupt(self):
     with self._state_lock:
       if self._state != TasksPoolResultState.RaisedException:
@@ -104,9 +104,6 @@ class TasksPool(Generic[E]):
 
     self._interrupted_event.set()
     self._semaphore_value.release_putter()
-    self._completed_event.wait()
-    for thread in self._threads:
-      thread.join()
 
   # complete all threads and block until all stopped
   def complete(self) -> TasksPoolResultState:

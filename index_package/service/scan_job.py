@@ -37,7 +37,8 @@ class ServiceScanJob:
       on_handle=lambda id, i: self._handle_event(id, i),
     )
 
-  def start(self):
+  # @return True if scan completed, False if scan interrupted
+  def start(self) -> bool:
     self._pool.start()
 
     if self._progress is not None:
@@ -52,6 +53,10 @@ class ServiceScanJob:
     state = self._pool.complete()
     if state == TasksPoolResultState.RaisedException:
       raise RuntimeError("scan failed with Exception")
+    elif state == TasksPoolResultState.Interrupted:
+      return False
+    else:
+      return True
 
   # could be called in another thread safely
   def interrupt(self):

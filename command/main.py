@@ -1,6 +1,6 @@
 import os
-import signal
 import sys
+import signal
 import json
 import argparse
 import shutil
@@ -50,6 +50,7 @@ def main():
   args = parser.parse_args()
   package, workspace_path = _package_and_path(args.package)
   workspace_path = os.path.join(workspace_path, "workspace")
+  exit_code: int = 0
 
   if args.purge == True:
     if args.scan == True:
@@ -71,7 +72,10 @@ def main():
         signal.SIGINT,
         lambda sig, frame: _on_handle_signal(scan_job),
       )
-      scan_job.start()
+      success = scan_job.start()
+      if not success:
+        print("Complete Interrupted.")
+        exit_code = 130
 
     else:
       text = " ".join(args.text)
@@ -86,11 +90,11 @@ def main():
         )
         show_items(query_result)
 
+  sys.exit(exit_code)
+
 def _on_handle_signal(scan_job: ServiceScanJob):
-    print("Interrupting...")
-    scan_job.interrupt()
-    print("Complete Interrupted.")
-    sys.exit(0)
+  print("Interrupting...")
+  scan_job.interrupt()
 
 def _package_and_path(package_path: str) -> tuple[dict, str]:
   package_path = os.path.join(os.getcwd(), package_path)
