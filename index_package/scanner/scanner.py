@@ -57,6 +57,9 @@ class Scanner:
 
     return conn
 
+  def close(self):
+    self._conn.close()
+
   @property
   def events_count(self) -> int:
     cursor = self._conn.cursor()

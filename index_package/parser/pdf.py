@@ -118,6 +118,9 @@ class PdfParser:
 
     return conn
 
+  def close(self):
+    self._conn.close()
+
   @property
   def name(self) -> str:
     return "pdf"

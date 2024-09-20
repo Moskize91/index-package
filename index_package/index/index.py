@@ -72,6 +72,10 @@ class Index:
 
     return conn
 
+  def close(self):
+    self._index_db.close()
+    self._conn.close()
+
   def get_paths(self, file_hash: str) -> list[str]:
     cursor = self._conn.cursor()
     cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (file_hash,))

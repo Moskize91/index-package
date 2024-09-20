@@ -45,6 +45,9 @@ class FTS5DB:
 
     return conn
 
+  def close(self):
+    self._conn.close()
+
   def query(
     self,
     query_text: str,

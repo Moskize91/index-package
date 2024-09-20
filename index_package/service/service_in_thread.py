@@ -56,5 +56,5 @@ class ServiceInThread:
     self._index.handle_event(event, progress)
 
   def close(self):
-    # TODO:
-    pass
+    self._pdf_parser.close()
+    self._index.close()
