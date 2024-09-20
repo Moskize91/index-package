@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from ..progress import Progress
 from .trimmer import trim_nodes, QueryItem
-from ..scanner import Event
+from ..scanner import Event, Scope
 from ..parser import PdfParser
 from ..segmentation import Segmentation
 from ..index import Index, VectorDB, FTS5DB
@@ -19,7 +19,7 @@ class QueryResult:
 class ServiceInThread:
   def __init__(
     self,
-    sources: dict[str, str],
+    scope: Scope,
     pdf_parser_cache_path: str,
     pdf_parser_temp_path: str,
     fts5_db_path: str,
@@ -27,18 +27,17 @@ class ServiceInThread:
     segmentation: Segmentation,
     vector_db: VectorDB,
   ):
-    self._sources: dict[str, str] = sources
     self._pdf_parser: PdfParser = PdfParser(
       cache_dir_path=pdf_parser_cache_path,
       temp_dir_path=pdf_parser_temp_path,
     )
     self._index: Index = Index(
+      scope=scope,
       pdf_parser=self._pdf_parser,
       fts5_db=FTS5DB(db_path=fts5_db_path),
       vector_db=vector_db,
       index_dir_path=index_dir_path,
       segmentation=segmentation,
-      sources=sources,
     )
 
   def query(self, text: str, results_limit: Optional[int]) -> QueryResult:

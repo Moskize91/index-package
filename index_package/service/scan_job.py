@@ -3,7 +3,7 @@ import threading
 
 from typing import cast, Optional, Callable
 from .service_in_thread import ServiceInThread
-from ..scanner import EventParser, Scanner
+from ..scanner import Scope, EventParser, Scanner
 from ..progress import Progress
 from ..utils import TasksPool, TasksPoolResultState
 
@@ -14,20 +14,16 @@ class ServiceScanJob:
     self,
     scan_db_path: str,
     max_workers: int,
-    sources: dict[str, str],
-    create_service: Callable[[], ServiceInThread],
+    create_service: Callable[[Scope], ServiceInThread],
     progress: Optional[Progress],
   ):
     self._job_contexts: list[Optional[_JobContext]] = [None for _ in range(max_workers)]
-    self._sources: dict[str, str] = sources
-    self._create_service: Callable[[], ServiceInThread] = create_service
-    self._scan_db_path: str = scan_db_path
+    self._create_service: Callable[[Scope], ServiceInThread] = create_service
     self._progress: Optional[Progress] = progress
     self._interrupter_lock: threading.Lock = threading.Lock()
     self._did_interrupted: bool = False
     self._scanner: Scanner = Scanner(
       db_path=scan_db_path,
-      sources=self._sources,
     )
     self._pool: TasksPool[int] = TasksPool[int](
       max_workers=max_workers,
@@ -38,7 +34,10 @@ class ServiceScanJob:
     )
 
   # @return True if scan completed, False if scan interrupted
-  def start(self) -> bool:
+  def start(self, sources: Optional[dict[str, str]] = None) -> bool:
+    if sources is not None:
+      self._scanner.commit_sources(sources)
+
     event_ids = self._scanner.scan()
     self._pool.start()
 
@@ -70,7 +69,7 @@ class ServiceScanJob:
 
   def _init_context(self, index: int):
     self._job_contexts[index] = (
-      self._create_service(),
+      self._create_service(self._scanner.scope),
       self._scanner.event_parser(),
     )
 
@@ -81,8 +80,11 @@ class ServiceScanJob:
 
   def _handle_event(self, event_id: int, index: int):
     service, parser = cast(_JobContext, self._job_contexts[index])
+    scope = self._scanner.scope
+
     with parser.parse(event_id) as event:
-      path = os.path.join(self._sources[event.scope], f".{event.path}")
+      scope_path = cast(str, scope.scope_path(event.scope))
+      path = os.path.join(scope_path, f".{event.path}")
       path = os.path.abspath(path)
 
       if self._progress is not None:

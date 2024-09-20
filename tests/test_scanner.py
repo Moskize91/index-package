@@ -11,10 +11,10 @@ class TestScanner(unittest.TestCase):
 
   def test_scanning_folder(self):
     scan_path, db_path = self.setup_paths()
-    scanner = Scanner(
-      db_path=db_path,
-      sources={ "test": scan_path },
-    )
+    scanner = Scanner(db_path)
+    scanner.commit_sources({
+      "test": scan_path,
+    })
     self._test_insert_files(scan_path, scanner)
     time.sleep(0.1)
     self._test_modify_part_of_files(scan_path, scanner)

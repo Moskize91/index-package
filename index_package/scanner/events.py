@@ -15,8 +15,12 @@ def scan_events(conn: Connection) -> Generator[int, None, None]:
   cursor = conn.cursor()
   try:
     cursor.execute("SELECT id FROM events ORDER BY id")
-    for row in cursor.fetchmany(size=45):
-      yield row[0]
+    while True:
+      rows = cursor.fetchmany(size=100)
+      if len(rows) == 0:
+        break
+      for row in rows:
+        yield row[0]
   finally:
     cursor.close()
 
@@ -62,17 +66,17 @@ def _handle_updated_when_exits_row(
     if mtime == origin_mtime:
       cursor.execute(
         "DELETE FROM events WHERE scope = ? AND path = ? AND target = ?",
-        (scope, path, target),
+        (scope, path, target.value),
       )
     else:
       cursor.execute(
         "UPDATE events SET kind = ?, mtime = ? WHERE scope = ? AND path = ? AND target = ?",
-        (EventKind.Updated.value, mtime, scope, path, target),
+        (EventKind.Updated.value, mtime, scope, path, target.value),
       )
   elif mtime != origin_mtime:
     cursor.execute(
       "UPDATE events SET mtime = ? WHERE scope = ? AND path = ? AND target = ?",
-      (mtime, scope, path, target),
+      (mtime, scope, path, target.value),
     )
 
 def record_removed_event(cursor: Cursor, target: EventTarget, path: str, scope: str, mtime: float):
@@ -94,15 +98,15 @@ def record_removed_event(cursor: Cursor, target: EventTarget, path: str, scope: 
     if kind == EventKind.Added:
       cursor.execute(
         "DELETE FROM events WHERE scope = ? AND path = ? AND target = ?",
-        (scope, path, target),
+        (scope, path, target.value),
       )
     elif kind == EventKind.Updated:
       cursor.execute(
         "UPDATE events SET kind = ?, mtime = ? WHERE scope = ? AND path = ? AND target = ?",
-        (EventKind.Removed.value, mtime, scope, path, target),
+        (EventKind.Removed.value, mtime, scope, path, target.value),
       )
     elif kind == EventKind.Removed and mtime != origin_mtime:
       cursor.execute(
         "UPDATE events SET mtime = ? WHERE scope = ? AND path = ? AND target = ?",
-        (mtime, scope, path, target),
+        (mtime, scope, path, target.value),
       )
