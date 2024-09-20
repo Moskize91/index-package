@@ -8,8 +8,9 @@ import shutil
 from dataclasses import dataclass
 from typing import Any
 from tqdm import tqdm
-from index_package import Service, ServiceScanJob, ProgressListeners
-from command.display import show_items
+from index_package import Service, ProgressListeners
+from .display import show_items
+from .signal_handler import SignalHandler
 
 def main():
   parser = argparse.ArgumentParser(
@@ -65,17 +66,19 @@ def main():
       embedding_model_id=embedding,
       sources=sources,
     )
+    signal_handler = SignalHandler(service)
+
     if args.scan == True:
       listeners = _create_progress_listeners()
       scan_job = service.scan_job(progress_listeners=listeners)
-      signal.signal(
-        signal.SIGINT,
-        lambda sig, frame: _on_handle_signal(scan_job),
-      )
+      signal_handler.watch(scan_job)
       success = scan_job.start()
+
       if not success:
-        print("Complete Interrupted.")
+        print("\nComplete Interrupted.")
         exit_code = 130
+
+      signal_handler.stop_watch()
 
     else:
       text = " ".join(args.text)
@@ -91,10 +94,6 @@ def main():
         show_items(query_result)
 
   sys.exit(exit_code)
-
-def _on_handle_signal(scan_job: ServiceScanJob):
-  print("Interrupting...")
-  scan_job.interrupt()
 
 def _package_and_path(package_path: str) -> tuple[dict, str]:
   package_path = os.path.join(os.getcwd(), package_path)
