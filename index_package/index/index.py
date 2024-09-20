@@ -41,34 +41,37 @@ class Index:
 
     if is_first_time:
       cursor = conn.cursor()
-      cursor.execute("""
-        CREATE TABLE files (
-          id INTEGER PRIMARY KEY,
-          type TEXT NOT NULL,
-          scope TEXT NOT NULL,
-          path TEXT NOT NULL,
-          hash TEXT NOT NULL
-        )
-      """)
-      cursor.execute("""
-        CREATE TABLE pages (
-          id INTEGER PRIMARY KEY,
-          pdf_hash TEXT NOT NULL,
-          page_index INTEGER NOT NULL,
-          hash TEXT NOT NULL
-        )
-      """)
-      cursor.execute("""
-        CREATE INDEX idx_files ON files (hash)
-      """)
-      cursor.execute("""
-        CREATE INDEX idx_pages ON pages (hash)
-      """)
-      cursor.execute("""
-        CREATE INDEX idx_parent_pages ON pages (pdf_hash, page_index)
-      """)
-      conn.commit()
-      cursor.close()
+      try:
+        cursor.execute("""
+          CREATE TABLE files (
+            id INTEGER PRIMARY KEY,
+            type TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            path TEXT NOT NULL,
+            hash TEXT NOT NULL
+          )
+        """)
+        cursor.execute("""
+          CREATE TABLE pages (
+            id INTEGER PRIMARY KEY,
+            pdf_hash TEXT NOT NULL,
+            page_index INTEGER NOT NULL,
+            hash TEXT NOT NULL
+          )
+        """)
+        cursor.execute("""
+          CREATE INDEX idx_files ON files (hash)
+        """)
+        cursor.execute("""
+          CREATE INDEX idx_pages ON pages (hash)
+        """)
+        cursor.execute("""
+          CREATE INDEX idx_parent_pages ON pages (pdf_hash, page_index)
+        """)
+        conn.commit()
+
+      finally:
+        cursor.close()
 
     return conn
 
@@ -78,16 +81,19 @@ class Index:
 
   def get_paths(self, file_hash: str) -> list[str]:
     cursor = self._conn.cursor()
-    cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (file_hash,))
-    paths: list[str] = []
+    try:
+      cursor.execute("SELECT scope, path FROM files WHERE hash = ?", (file_hash,))
+      paths: list[str] = []
 
-    for row in cursor.fetchall():
-      scope, path = row
-      scope_path = self._get_abs_path(scope, path)
-      if scope_path is not None:
-        paths.append(scope_path)
+      for row in cursor.fetchall():
+        scope, path = row
+        scope_path = self._get_abs_path(scope, path)
+        if scope_path is not None:
+          paths.append(scope_path)
+      return paths
 
-    return paths
+    finally:
+      cursor.close()
 
   def get_page_relative_to_pdf(self, page_hash: str) -> list[PageRelativeToPDF]:
     cursor = self._conn.cursor()
@@ -148,8 +154,8 @@ class Index:
     if path is None:
       return
 
+    cursor = self._conn.cursor()
     try:
-      cursor = self._conn.cursor()
       cursor.execute("BEGIN TRANSACTION")
       new_hash, origin_id_hash = self._update_file_with_event(cursor, path, event)
 
@@ -175,6 +181,9 @@ class Index:
     except Exception as e:
       self._conn.rollback()
       raise e
+
+    finally:
+      cursor.close()
 
   def _filter_and_get_abspath(self, event: Event) -> Optional[str]:
     if event.target == EventTarget.Directory:

@@ -20,28 +20,31 @@ class FTS5DB:
 
     if is_first_time:
       cursor = conn.cursor()
-      # unicode61 remove_diacritics 2 means: diacritics are correctly removed from all Latin characters.
-      # to see: https://www.sqlite.org/fts5.html
-      cursor.execute("""
-        CREATE VIRTUAL TABLE contents USING fts5(
-          content,
-          tokenize = "unicode61 remove_diacritics 2"
-        );
-      """)
-      cursor.execute("""
-        CREATE TABLE nodes (
-          node_id TEXT PRIMARY KEY,
-          type TEXT,
-          metadata TEXT NOT NULL,
-          segments TEXT NOT NULL,
-          content_id INTEGER NOT NULL
-        )
-      """)
-      cursor.execute("""
-        CREATE INDEX idx_nodes ON nodes (content_id)
-      """)
-      conn.commit()
-      cursor.close()
+      try:
+        # unicode61 remove_diacritics 2 means: diacritics are correctly removed from all Latin characters.
+        # to see: https://www.sqlite.org/fts5.html
+        cursor.execute("""
+          CREATE VIRTUAL TABLE contents USING fts5(
+            content,
+            tokenize = "unicode61 remove_diacritics 2"
+          );
+        """)
+        cursor.execute("""
+          CREATE TABLE nodes (
+            node_id TEXT PRIMARY KEY,
+            type TEXT,
+            metadata TEXT NOT NULL,
+            segments TEXT NOT NULL,
+            content_id INTEGER NOT NULL
+          )
+        """)
+        cursor.execute("""
+          CREATE INDEX idx_nodes ON nodes (content_id)
+        """)
+        conn.commit()
+
+      finally:
+        cursor.close()
 
     return conn
 
@@ -126,8 +129,8 @@ class FTS5DB:
       raise e
 
   def remove(self, node_id: str):
+    cursor = self._conn.cursor()
     try:
-      cursor = self._conn.cursor()
       cursor.execute("SELECT content_id FROM nodes WHERE node_id = ?", (node_id,))
       row = cursor.fetchone()
       if row is not None:
@@ -141,6 +144,9 @@ class FTS5DB:
     except Exception as e:
       self._conn.rollback()
       raise e
+
+    finally:
+      cursor.close()
 
   def _analysis_segments(self, query_tokens_set: set[str], segments: list[_Segment]) -> tuple[list[IndexSegment], float]:
     query_tokens_len = len(query_tokens_set)

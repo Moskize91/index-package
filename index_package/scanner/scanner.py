@@ -28,32 +28,35 @@ class Scanner:
 
     if is_first_time:
       cursor = conn.cursor()
-      cursor.execute('''
-        CREATE TABLE files (
-          id TEXT PRIMARY KEY,
-          mtime REAL NOT NULL,
-          scope TEXT NOT NULL,
-          children TEXT
-        )
-      ''')
-      cursor.execute('''
-        CREATE TABLE events (
-          id INTEGER PRIMARY KEY,
-          kind INTEGER NOT NULL,
-          target INTEGER NOT NULL,
-          path TEXT NOT NULL,
-          scope TEXT NOT NULL,
-          mtime REAL NOT NULL
-        )
-      ''')
-      # TODO: 需要存储 path，以便 sources 变化时能读取到上一次的数据
-      cursor.execute('''
-        CREATE TABLE scopes (
-          name TEXT PRIMARY KEY
-        )
-      ''')
-      conn.commit()
-      cursor.close()
+      try:
+        cursor.execute('''
+          CREATE TABLE files (
+            id TEXT PRIMARY KEY,
+            mtime REAL NOT NULL,
+            scope TEXT NOT NULL,
+            children TEXT
+          )
+        ''')
+        cursor.execute('''
+          CREATE TABLE events (
+            id INTEGER PRIMARY KEY,
+            kind INTEGER NOT NULL,
+            target INTEGER NOT NULL,
+            path TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            mtime REAL NOT NULL
+          )
+        ''')
+        # TODO: 需要存储 path，以便 sources 变化时能读取到上一次的数据
+        cursor.execute('''
+          CREATE TABLE scopes (
+            name TEXT PRIMARY KEY
+          )
+        ''')
+        conn.commit()
+
+      finally:
+        cursor.close()
 
     return conn
 
