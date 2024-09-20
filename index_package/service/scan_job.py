@@ -83,14 +83,18 @@ class ServiceScanJob:
     scope = self._scanner.scope
 
     with parser.parse(event_id) as event:
-      scope_path = cast(str, scope.scope_path(event.scope))
-      path = os.path.join(scope_path, f".{event.path}")
-      path = os.path.abspath(path)
+      display_path = event.path
+      scope_path = scope.scope_path(event.scope)
+      if scope_path is not None:
+        display_path = os.path.join(scope_path, f".{event.path}")
+        display_path = os.path.abspath(display_path)
+      else:
+        display_path = f"[removed]:{display_path}"
 
       if self._progress is not None:
-        self._progress.start_handle_file(path)
+        self._progress.start_handle_file(display_path)
 
       service.handle_event(event, self._progress)
 
       if self._progress is not None:
-        self._progress.complete_handle_file(path)
+        self._progress.complete_handle_file(display_path)
