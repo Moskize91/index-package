@@ -39,13 +39,14 @@ class ServiceScanJob:
 
   # @return True if scan completed, False if scan interrupted
   def start(self) -> bool:
+    event_ids = self._scanner.scan()
     self._pool.start()
 
     if self._progress is not None:
       count = self._scanner.events_count
       self._progress.start_scan(count)
 
-    for event_id in self._scanner.scan():
+    for event_id in event_ids:
       success = self._pool.push(event_id)
       if not success:
         break
