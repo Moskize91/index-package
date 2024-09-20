@@ -3,6 +3,7 @@ import os
 from typing import Optional
 from .service_in_thread import ServiceInThread, QueryResult
 from .scan_job import ServiceScanJob
+from ..scanner import Scope, Scanner
 from ..index import VectorDB
 from ..segmentation.segmentation import Segmentation
 from ..progress import Progress, ProgressListeners
@@ -13,9 +14,7 @@ class Service:
     self,
     workspace_path: str,
     embedding_model_id: str,
-    sources: dict[str, str],
   ):
-    self._sources: dict[str, str] = sources.copy()
     self._service_in_thread: Optional[ServiceInThread] = None
     self._scan_db_path: str = ensure_parent_dir(
       os.path.abspath(os.path.join(workspace_path, "scanner.sqlite3"))
@@ -56,21 +55,22 @@ class Service:
       progress = Progress(progress_listeners)
 
     return ServiceScanJob(
-      sources=self._sources,
       max_workers=max_workers,
       scan_db_path=self._scan_db_path,
       progress=progress,
-      create_service=lambda: self._create_service_in_thread(),
+      create_service=lambda scope: self._create_service_in_thread(scope),
     )
 
   def _get_service_in_thread(self) -> ServiceInThread:
     if self._service_in_thread is None:
-      self._service_in_thread = self._create_service_in_thread()
+      scanner = Scanner(self._scan_db_path)
+      self._service_in_thread = self._create_service_in_thread(scanner.scope)
+
     return self._service_in_thread
 
-  def _create_service_in_thread(self) -> ServiceInThread:
+  def _create_service_in_thread(self, scope: Scope) -> ServiceInThread:
     return ServiceInThread(
-      sources=self._sources,
+      scope=scope,
       pdf_parser_cache_path=self._pdf_parser_cache_path,
       pdf_parser_temp_path=self._pdf_parser_temp_path,
       fts5_db_path=self._fts5_db_path,

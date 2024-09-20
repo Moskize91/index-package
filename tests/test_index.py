@@ -1,8 +1,9 @@
 import os
 import unittest
 
+from typing import Optional
 from index_package.parser import PdfParser
-from index_package.scanner import Event, EventKind, EventTarget
+from index_package.scanner import Scope, Event, EventKind, EventTarget
 from index_package.segmentation import Segment, Segmentation
 from index_package.index import Index, IndexNode, VectorDB, FTS5DB, IndexNodeMatching
 from index_package.index.index_db import IndexDB
@@ -176,9 +177,9 @@ class TestIndex(unittest.TestCase):
       fts5_db=fts5_db,
       vector_db=vector_db,
       index_dir_path=get_temp_path("index_vector/index"),
-      sources={
+      scope=_Scope({
         "assets": os.path.abspath(os.path.join(__file__, "../assets")),
-      },
+      }),
     )
     added_event = Event(
       id=0,
@@ -198,3 +199,15 @@ class TestIndex(unittest.TestCase):
       [(s.start, s.end) for s in node.segments],
       [(0, len("Identification"))],
     )
+
+class _Scope(Scope):
+  def __init__(self, sources: dict[str, str]) -> None:
+    super().__init__()
+    self._sources: dict[str, str] = sources
+
+  @property
+  def scopes(self) -> list[str]:
+    return list(self._sources.keys())
+
+  def scope_path(self, scope: str) -> Optional[str]:
+    return self._sources.get(scope, None)

@@ -64,7 +64,6 @@ def main():
     service = Service(
       workspace_path=workspace_path,
       embedding_model_id=embedding,
-      sources=sources,
     )
     signal_handler = SignalHandler(service)
 
@@ -72,7 +71,7 @@ def main():
       listeners = _create_progress_listeners()
       scan_job = service.scan_job(progress_listeners=listeners)
       signal_handler.watch(scan_job)
-      success = scan_job.start()
+      success = scan_job.start(sources)
 
       if not success:
         print("\nComplete Interrupted.")

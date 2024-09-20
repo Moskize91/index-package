@@ -50,7 +50,7 @@ def _show_pdf_item(pdf: PdfQueryItem):
 def _show_page_item(page: PageQueryItem) -> int:
   count = 0
   print(colored(_split_str("-"), "dark_grey"))
-  if len(page.pdf_files) == 0:
+  if len(page.pdf_files) == 1:
     pdf_file = page.pdf_files[0]
     pdf_file_path = colored(pdf_file.pdf_path, "dark_grey")
     print(f"PDF File page at page {pdf_file.page_index + 1}: {pdf_file_path}")

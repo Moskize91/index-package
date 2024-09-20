@@ -11,7 +11,7 @@ from .vector_db import VectorDB
 from .index_db import IndexDB
 from .types import IndexNode, PageRelativeToPDF
 from ..parser import PdfParser, PdfMetadata, PdfPage
-from ..scanner import Event, EventKind, EventTarget
+from ..scanner import Scope, Event, EventKind, EventTarget
 from ..segmentation import Segment, Segmentation
 from ..progress import Progress
 from ..utils import hash_sha512, ensure_parent_dir, is_empty_string, assert_continue, InterruptException
@@ -19,17 +19,17 @@ from ..utils import hash_sha512, ensure_parent_dir, is_empty_string, assert_cont
 class Index:
   def __init__(
     self,
+    scope: Scope,
     index_dir_path: str,
     pdf_parser: PdfParser,
     segmentation: Segmentation,
     fts5_db: FTS5DB,
     vector_db: VectorDB,
-    sources: dict[str, str],
   ):
+    self._scope: Scope = scope
     self._pdf_parser: PdfParser = pdf_parser
     self._segmentation: Segmentation = segmentation
     self._index_db: IndexDB = IndexDB(fts5_db, vector_db)
-    self._sources: dict[str, str] = sources
     self._conn: sqlite3.Connection = self._connect(
       ensure_parent_dir(os.path.join(index_dir_path, "index.sqlite3"))
     )
@@ -120,7 +120,7 @@ class Index:
     return pages
 
   def _get_abs_path(self, scope: str, path: str) -> Optional[str]:
-    scope_path = self._sources.get(scope, None)
+    scope_path = self._scope.scope_path(scope)
     if scope_path is None:
       return None
     path = os.path.join(scope_path, f".{path}")
@@ -189,7 +189,7 @@ class Index:
     if event.target == EventTarget.Directory:
       return
 
-    scope_path = self._sources.get(event.scope, None)
+    scope_path = self._scope.scope_path(event.scope)
     if scope_path is None:
       return
 

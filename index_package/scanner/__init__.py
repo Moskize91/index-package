@@ -1,2 +1,4 @@
 from .scanner import Scanner
-from .events import Event, EventKind, EventTarget, EventParser
+from .scope import Scope
+from .events import EventKind, EventTarget
+from .event_parser import Event, EventParser
