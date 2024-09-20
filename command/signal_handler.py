@@ -9,7 +9,7 @@ class SignalHandler:
   def __init__(self, service: Service):
     self._service: Service = service
     self._scan_job: Optional[ServiceScanJob] = None
-    self._first_interrupted_at: Optional[float] = time.time()
+    self._first_interrupted_at: Optional[float] = None
 
   def watch(self, scan_job: ServiceScanJob):
     if self._scan_job is not None:
@@ -31,6 +31,7 @@ class SignalHandler:
 
       if duration_seconds > limit_seconds:
         print("\nForce stopping...")
+        print("It may corrupt the data structure of the database")
         self._service.freeze_database()
         sys.exit(1)
       else:
