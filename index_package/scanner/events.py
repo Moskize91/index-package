@@ -1,16 +1,6 @@
-import sqlite3
-
+from sqlite3 import Connection, Cursor
 from enum import Enum
-from typing import Generator, Optional, Callable
-
-def scan_events(conn: sqlite3.Connection) -> Generator[int, None, None]:
-  cursor = conn.cursor()
-  try:
-    cursor.execute("SELECT id FROM events ORDER BY id")
-    for row in cursor.fetchmany(size=45):
-      yield row[0]
-  finally:
-    cursor.close()
+from typing import Generator
 
 class EventKind(Enum):
   Added = 0
@@ -21,60 +11,29 @@ class EventTarget(Enum):
   File = 0
   Directory = 1
 
-class Event:
-  def __init__(
-    self,
-    id: int,
-    kind: EventKind,
-    target: EventTarget,
-    scope: str,
-    path: str,
-    mtime: float,
-    on_exit: Optional[Callable[[], None]] = None,
-  ):
-    self.id: int = id
-    self.kind: EventKind = kind
-    self.target: EventTarget = target
-    self.scope: str = scope
-    self.path: str = path
-    self.mtime: float = mtime
-    self._on_exit: Optional[Callable[[], None]] = on_exit
+def scan_events(conn: Connection) -> Generator[int, None, None]:
+  cursor = conn.cursor()
+  try:
+    cursor.execute("SELECT id FROM events ORDER BY id")
+    for row in cursor.fetchmany(size=45):
+      yield row[0]
+  finally:
+    cursor.close()
 
-  def __enter__(self):
-    return self
+def record_added_event(cursor: Cursor, target: EventTarget, path: str, scope: str, mtime: float):
+  cursor.execute(
+    "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
+    (EventKind.Added.value, target.value, path, scope, mtime),
+  )
 
-  def __exit__(self, exc_type, exc_value, traceback):
-    if exc_type is None and self._on_exit is not None:
-      self._on_exit()
+def record_updated_event(cursor: Cursor, target: EventTarget, path: str, scope: str, mtime: float):
+  cursor.execute(
+    "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
+    (EventKind.Updated.value, target.value, path, scope, mtime),
+  )
 
-class EventParser:
-  def __init__(self, conn: sqlite3.Connection):
-    self._conn: sqlite3.Connection = conn
-    self._cursor = self._conn.cursor()
-
-  def parse(self, event_id: int) -> Event:
-    self._cursor.execute(
-      "SELECT kind, target, path, scope, mtime FROM events WHERE id = ?",
-      (event_id,)
-    )
-    row = self._cursor.fetchone()
-    if row is None:
-      raise Exception(f"Event not found: {event_id}")
-
-    return Event(
-      id=event_id,
-      kind=EventKind(row[0]),
-      target=EventTarget(row[1]),
-      path=row[2],
-      scope=row[3],
-      mtime=row[4],
-      on_exit=lambda: self._remove_event(event_id),
-    )
-
-  def close(self):
-    self._cursor.close()
-    self._conn.close()
-
-  def _remove_event(self, event_id: int):
-    self._cursor.execute("DELETE FROM events WHERE id = ?", (event_id,))
-    self._conn.commit()
+def record_removed_event(cursor: Cursor, target: EventTarget, path: str, scope: str, mtime: float):
+  cursor.execute(
+    "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
+    (EventKind.Removed.value, target.value, path, scope, mtime),
+  )

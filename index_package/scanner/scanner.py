@@ -3,8 +3,9 @@ import sqlite3
 
 from dataclasses import dataclass
 from typing import Optional, Generator
+from .events import scan_events, record_added_event, record_updated_event, record_removed_event
+from .event_parser import EventKind, EventTarget, EventParser
 from ..utils import assert_continue
-from .events import scan_events, EventKind, EventTarget, EventParser
 
 @dataclass
 class _File:
@@ -213,20 +214,16 @@ class Scanner:
           "INSERT INTO files (id, mtime, scope, children) VALUES (?, ?, ?, ?)",
           (file_id, new_mtime, scope, new_children),
         )
-        cursor.execute(
-          "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
-          (EventKind.Added.value, new_target.value, new_path, scope, new_mtime),
-        )
+        record_added_event(cursor, new_target, new_path, scope, new_mtime)
+
       else:
         file_id = self._file_id(scope, new_path)
         cursor.execute(
           "UPDATE files SET mtime = ?, children = ? WHERE id = ?",
           (new_mtime, new_children, file_id),
         )
-        cursor.execute(
-          "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
-          (EventKind.Updated.value, new_target.value, new_path, scope, new_mtime),
-        )
+        record_updated_event(cursor, new_target, new_path, scope, new_mtime)
+
     elif old_file is not None:
       old_path = old_file.path
       old_mtime = old_file.mtime
@@ -234,10 +231,8 @@ class Scanner:
       file_id = self._file_id(scope, old_path)
 
       cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
-      cursor.execute(
-        "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
-        (EventKind.Removed.value, old_target.value, old_path, scope, old_mtime),
-      )
+      record_removed_event(cursor, old_target, old_path, scope, old_mtime)
+
       if old_file.children is not None:
         self._handle_removed_folder(cursor, scope, old_file)
 
@@ -275,10 +270,7 @@ class Scanner:
         self._handle_removed_folder(cursor, scope, child_file)
 
       cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
-      cursor.execute(
-        "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
-        (EventKind.Removed.value, target.value, child_path, scope, child_file.mtime),
-      )
+      record_removed_event(cursor, target, child_path, scope, child_file.mtime)
 
   def _handle_removed_folder(self, cursor: sqlite3.Cursor, scope: str, folder: _File):
     assert folder.children is not None
@@ -295,10 +287,7 @@ class Scanner:
         self._handle_removed_folder(cursor, scope, file)
 
       cursor.execute("DELETE FROM files WHERE id = ?", (file.path,))
-      cursor.execute(
-        "INSERT INTO events (kind, target, path, scope, mtime) VALUES (?, ?, ?, ?, ?)",
-        (EventKind.Removed.value, target.value, file.path, scope, file.mtime),
-      )
+      record_removed_event(cursor, target, file.path, scope, file.mtime)
 
   def _select_file(self, cursor: sqlite3.Cursor, scope: str, relative_path: str) -> Optional[_File]:
     file_id = self._file_id(scope, relative_path)
