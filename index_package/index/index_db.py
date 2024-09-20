@@ -9,6 +9,9 @@ class IndexDB:
     self._fts5_db: FTS5DB = fts5_db
     self._vector_db: VectorDB = vector_db
 
+  def close(self):
+    self._fts5_db.close()
+
   def save(self, node_id: str, segments: list[Segment], metadata: dict):
     self._fts5_db.save(node_id, segments, metadata)
     self._vector_db.save(node_id, segments, metadata)

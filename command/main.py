@@ -1,6 +1,6 @@
 import os
-import signal
 import sys
+import signal
 import json
 import argparse
 import shutil
@@ -8,8 +8,9 @@ import shutil
 from dataclasses import dataclass
 from typing import Any
 from tqdm import tqdm
-from index_package import Service, ServiceScanJob, ProgressListeners
-from command.display import show_items
+from index_package import Service, ProgressListeners
+from .display import show_items
+from .signal_handler import SignalHandler
 
 def main():
   parser = argparse.ArgumentParser(
@@ -50,6 +51,7 @@ def main():
   args = parser.parse_args()
   package, workspace_path = _package_and_path(args.package)
   workspace_path = os.path.join(workspace_path, "workspace")
+  exit_code: int = 0
 
   if args.purge == True:
     if args.scan == True:
@@ -64,14 +66,19 @@ def main():
       embedding_model_id=embedding,
       sources=sources,
     )
+    signal_handler = SignalHandler(service)
+
     if args.scan == True:
       listeners = _create_progress_listeners()
       scan_job = service.scan_job(progress_listeners=listeners)
-      signal.signal(
-        signal.SIGINT,
-        lambda sig, frame: _on_handle_signal(scan_job),
-      )
-      scan_job.start()
+      signal_handler.watch(scan_job)
+      success = scan_job.start()
+
+      if not success:
+        print("\nComplete Interrupted.")
+        exit_code = 130
+
+      signal_handler.stop_watch()
 
     else:
       text = " ".join(args.text)
@@ -86,11 +93,7 @@ def main():
         )
         show_items(query_result)
 
-def _on_handle_signal(scan_job: ServiceScanJob):
-    print("Interrupting...")
-    scan_job.interrupt()
-    print("Complete Interrupted.")
-    sys.exit(0)
+  sys.exit(exit_code)
 
 def _package_and_path(package_path: str) -> tuple[dict, str]:
   package_path = os.path.join(os.getcwd(), package_path)
@@ -129,7 +132,7 @@ def _create_progress_listeners() -> ProgressListeners:
     context.count = count
 
   def on_start_handle_file(path: str):
-    print(f"[{context.files_count}/{context.count}] Handling File {path}")
+    print(f"[{context.files_count + 1}/{context.count}] Handling File {path}")
 
   def on_complete_handle_file(_: str):
     context.files_count += 1
