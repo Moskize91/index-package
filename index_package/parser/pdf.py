@@ -278,11 +278,13 @@ class PdfParser:
         page_hashes.append(page_hash)
         target_page_path = os.path.join(self._pages_path, f"{page_hash}.pdf")
 
-        if not os.path.exists(target_page_path):
-          shutil.move(page_file_path, target_page_path)
-        elif os.path.isdir(target_page_path):
-          shutil.rmtree(target_page_path)
-          shutil.move(page_file_path, target_page_path)
+        if os.path.exists(target_page_path):
+          if os.path.isdir(target_page_path):
+            shutil.rmtree(target_page_path)
+          else:
+            os.remove(target_page_path)
+
+        shutil.move(page_file_path, target_page_path)
 
     return page_hashes
 

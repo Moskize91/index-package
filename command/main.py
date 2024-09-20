@@ -132,7 +132,7 @@ def _create_progress_listeners() -> ProgressListeners:
     context.count = count
 
   def on_start_handle_file(path: str):
-    print(f"[{context.files_count}/{context.count}] Handling File {path}")
+    print(f"[{context.files_count + 1}/{context.count}] Handling File {path}")
 
   def on_complete_handle_file(_: str):
     context.files_count += 1
