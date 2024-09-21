@@ -42,9 +42,10 @@ class ScopeManager(Scope):
         origin_path = origin_sources.get(name, None)
         if origin_path is None:
           cursor.execute("INSERT INTO scopes (name, path) VALUES (?, ?)", (name, path))
-        elif origin_path != path:
-          cursor.execute("UPDATE scopes SET path = ? WHERE name = ?", (path, name))
+        else:
           origin_sources.pop(name)
+          if origin_path != path:
+            cursor.execute("UPDATE scopes SET path = ? WHERE name = ?", (path, name))
 
       for name in origin_sources.keys():
         cursor.execute("DELETE FROM scopes WHERE name = ?", (name,))
