@@ -22,6 +22,7 @@
     "spacy",
     "termcolor",
     "tqdm",
-    "uids"
+    "uids",
+    "venv"
   ]
 }
