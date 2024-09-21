@@ -24,7 +24,7 @@ class Args:
       prog="Index Package",
       description="scan your files & save into index database",
     )
-    self._parser.add_argument("text", nargs='*', type=str, default="")
+    self._parser.add_argument("arguments", nargs="+", type=str, default="")
     self._parser.add_argument(
       "-p", "--package",
       default=".",
@@ -59,17 +59,25 @@ class Args:
   # @return args, package_path
   def parse_args(self) -> tuple[CommandArgs, str]:
     args = self._parser.parse_args()
+    arguments: list[str] = args.arguments
+    command = arguments[0].lower()
 
-    if args.purge and args.scan:
-      raise Exception("Cannot scan and purge at the same time")
-
-    if args.purge:
-      return CommandPurge(), args.package
-    elif args.scan:
-      return CommandScan(), args.package
+    if command in ("query", "purge", "scan"):
+      arguments = arguments[1:]
     else:
-      command = CommandQuery(
-        text=" ".join(args.text),
+      command = "query"
+
+    return self._parse_args_command(args, command, arguments), args.package
+
+  def _parse_args_command(self, args, command: str, arguments: list[str]) -> CommandArgs:
+    if command == "purge":
+      return CommandPurge()
+
+    elif command == "scan":
+      return CommandScan()
+
+    else:
+      return CommandQuery(
+        text=" ".join(arguments),
         limit=args.limit,
       )
-      return command, args.package
