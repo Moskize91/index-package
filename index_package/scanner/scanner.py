@@ -116,7 +116,7 @@ class Scanner:
     cursor: sqlite3.Cursor,
     scope: str,
   ):
-    next_relative_paths: list[str] = ["/"]
+    next_relative_paths: list[str] = [os.path.sep]
 
     while len(next_relative_paths) > 0:
       assert_continue()
@@ -254,6 +254,17 @@ class Scanner:
       cursor.execute("DELETE FROM files WHERE scope = ? AND path = ?", (scope, child_file.path))
       record_removed_event(cursor, child_file.event_target, child_path, scope, child_file.mtime)
 
+  def _file_inserted_children_and_target(self, file: _File) -> tuple[Optional[str], EventTarget]:
+    children: Optional[str] = None
+    target: EventTarget = EventTarget.File
+
+    if file.children is not None:
+      # "/" is disabled in unix & windows file system, so it's safe to use it as separator
+      children = "/".join(file.children)
+      target = EventTarget.Directory
+
+    return children, target
+
   def _handle_removed_folder(self, cursor: sqlite3.Cursor, folder: _File):
     assert folder.children is not None
 
@@ -282,13 +293,3 @@ class Scanner:
       children = children_str.split("/")
 
     return _File(scope, relative_path, mtime, children)
-
-  def _file_inserted_children_and_target(self, file: _File) -> tuple[Optional[str], EventTarget]:
-    children: Optional[str] = None
-    target: EventTarget = EventTarget.File
-
-    if file.children is not None:
-      children = "/".join(file.children)
-      target = EventTarget.Directory
-
-    return children, target

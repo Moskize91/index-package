@@ -16,7 +16,7 @@ def main():
   if is_interrupted:
     sys.exit(130)
   else:
-    sys.exit(1)
+    sys.exit(0)
 
 def _start_service_loop(args: Args, app: App) -> bool:
   print("Please press your commands.\n")
