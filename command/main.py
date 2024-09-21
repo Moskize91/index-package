@@ -3,59 +3,22 @@ import sys
 import json
 import shutil
 import yaml
-import argparse
 
 from dataclasses import dataclass
 from typing import Any, Optional
 from tqdm import tqdm
 from index_package import Service, ProgressListeners
+from .args import Args, CommandPurge, CommandQuery, CommandScan
 from .display import show_items
 from .signal_handler import SignalHandler
 
 def main():
-  parser = argparse.ArgumentParser(
-    prog="Index Package",
-    description="scan your files & save into index database",
-  )
-  parser.add_argument("text", nargs='*', type=str, default="")
-  parser.add_argument(
-    "-p", "--package",
-    default=".",
-    help="workspace directory path (default: current directory)",
-    required=False,
-    type=str,
-  )
-  parser.add_argument(
-    "--scan",
-    default=False,
-    help="scan all directories",
-    required=False,
-    type=bool,
-    action=argparse.BooleanOptionalAction,
-  )
-  parser.add_argument(
-    "--purge",
-    default=False,
-    help="purge all index data",
-    required=False,
-    type=bool,
-    action=argparse.BooleanOptionalAction,
-  )
-  parser.add_argument(
-    "--limit",
-    default=None,
-    help="workspace directory path (default: current directory)",
-    required=False,
-    type=int,
-  )
-  args = parser.parse_args()
-  package, workspace_path = _package_and_path(args.package)
+  command, package = Args().parse_args()
+  package, workspace_path = _package_and_path(package)
   workspace_path = os.path.join(workspace_path, "workspace")
   exit_code: int = 0
 
-  if args.purge == True:
-    if args.scan == True:
-      raise Exception("Cannot scan and purge at the same time")
+  if isinstance(command, CommandPurge):
     if os.path.exists(workspace_path):
       shutil.rmtree(workspace_path)
   else:
@@ -70,7 +33,7 @@ def main():
     )
     signal_handler = SignalHandler(service)
 
-    if args.scan == True:
+    if isinstance(command, CommandScan):
       listeners = _create_progress_listeners()
       scan_job = service.scan_job(progress_listeners=listeners)
       signal_handler.watch(scan_job)
@@ -82,8 +45,8 @@ def main():
 
       signal_handler.stop_watch()
 
-    else:
-      text = " ".join(args.text)
+    elif isinstance(command, CommandQuery):
+      text = command.text
       if len(text) == 0:
         print("Text not provided")
       else:
@@ -91,7 +54,7 @@ def main():
           raise Exception("You can search by providing text")
         query_result = service.query(
           text=text,
-          results_limit=args.limit,
+          results_limit=command.limit,
         )
         show_items(query_result)
 
