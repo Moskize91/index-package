@@ -4,6 +4,14 @@ from typing import Union, Optional
 from dataclasses import dataclass
 
 @dataclass
+class CommandStart:
+  pass
+
+@dataclass
+class CommandClear:
+  pass
+
+@dataclass
 class CommandPurge:
   pass
 
@@ -16,7 +24,13 @@ class CommandQuery:
   text: str
   limit: Optional[int]
 
-CommandArgs = Union[CommandPurge, CommandScan, CommandQuery]
+CommandArgs = Union[
+  CommandStart,
+  CommandClear,
+  CommandPurge,
+  CommandScan,
+  CommandQuery,
+]
 
 class Args:
   def __init__(self):
@@ -57,17 +71,23 @@ class Args:
     )
 
   # @return args, package_path
-  def parse_args(self) -> tuple[CommandArgs, str]:
-    args = self._parser.parse_args()
-    arguments: list[str] = args.arguments
+  def parse_args(self, command_line: Optional[str] = None) -> tuple[CommandArgs, str]:
+    args: Optional[list[str]] = None
+    if command_line is not None:
+      args = command_line.strip().split(" ")
+      if len(args) == 0:
+        args = None
+
+    parsed_args = self._parser.parse_args(args=args)
+    arguments: list[str] = parsed_args.arguments
     command = arguments[0].lower()
 
-    if command in ("query", "purge", "scan"):
+    if command in ("start", "query", "purge", "scan", "clear"):
       arguments = arguments[1:]
     else:
       command = "query"
 
-    return self._parse_args_command(args, command, arguments), args.package
+    return self._parse_args_command(parsed_args, command, arguments), parsed_args.package
 
   def _parse_args_command(self, args, command: str, arguments: list[str]) -> CommandArgs:
     if command == "purge":
@@ -76,8 +96,16 @@ class Args:
     elif command == "scan":
       return CommandScan()
 
-    else:
+    elif command == "start":
+      return CommandStart()
+
+    elif command == "clear":
+      return CommandClear()
+
+    elif command == "query":
       return CommandQuery(
         text=" ".join(arguments),
         limit=args.limit,
       )
+    else:
+      raise Exception(f"Invalid command {command}")

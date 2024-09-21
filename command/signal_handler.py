@@ -12,15 +12,20 @@ class SignalHandler:
     self._scan_job: Optional[ServiceScanJob] = None
     self._first_interrupted_at: Optional[float] = None
     self._lock: threading.Lock = threading.Lock()
+
+  def start_watch(self):
     signal.signal(signal.SIGINT, self._on_sigint)
 
-  def watch(self, scan_job: ServiceScanJob):
+  def stop_watch(self):
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+  def bind_scan_job(self, scan_job: ServiceScanJob):
     with self._lock:
       if self._scan_job is not None:
         raise Exception("SignalHandler already watching a scan job")
       self._scan_job = scan_job
 
-  def stop_watch(self):
+  def unbind_scan_job(self):
     with self._lock:
       self._scan_job = None
 
