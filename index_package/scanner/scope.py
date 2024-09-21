@@ -19,6 +19,7 @@ class Scope(ABC):
 class ScopeManager(Scope):
   def __init__(self, conn: Connection):
     cursor = conn.cursor()
+    self._removed_sources: dict[str, str] = {}
     try:
       self._sources = self._fill_sources(cursor)
     finally:
@@ -29,7 +30,10 @@ class ScopeManager(Scope):
     return list(self._sources.keys())
 
   def scope_path(self, scope: str) -> Optional[str]:
-    return self._sources.get(scope, None)
+    scope_path = self._sources.get(scope, None)
+    if scope_path is None:
+      scope_path = self._removed_sources.get(scope, None)
+    return scope_path
 
   def commit_sources(self, conn: Connection, sources: dict[str, str]):
     cursor = conn.cursor()
@@ -52,6 +56,7 @@ class ScopeManager(Scope):
         removed_scopes.append(name)
 
       for scope_name in removed_scopes:
+        self._removed_sources[scope_name] = origin_sources[scope_name]
         self._record_events_about_scope_removed(cursor, scope_name)
 
       self._sources = sources

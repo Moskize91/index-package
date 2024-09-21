@@ -203,6 +203,7 @@ class Index:
     return path
 
   def _update_file_with_event(self, cursor: sqlite3.Cursor, path: str, event: Event) -> tuple[Optional[str], Optional[tuple[int, str]]]:
+    cursor.execute("SELECT id, hash FROM files WHERE scope = ? AND path = ?", (event.scope, event.path,))
     row = cursor.fetchone()
     new_hash: Optional[str] = None
     origin_id_hash: Optional[tuple[int, str]] = None
