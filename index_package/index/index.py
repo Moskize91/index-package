@@ -263,7 +263,6 @@ class Index:
       raise e
 
   def _handle_lost_pdf_hash(self, cursor: sqlite3.Cursor, hash: str):
-    print("find pdf removed")
     cursor.execute(
       "SELECT hash FROM pages WHERE pdf_hash = ? ORDER BY page_index", (hash,),
     )
@@ -279,9 +278,11 @@ class Index:
       if cursor.fetchone() is None:
         page = self._pdf_parser.page(page_hash)
         if page is not None:
-          for index in range(len(page.annotations)):
-            self._index_db.remove(f"{page.hash}/anno/{index}/content")
-            self._index_db.remove(f"{page.hash}/anno/{index}/extracted")
+          for index, anno in enumerate(page.annotations):
+            if anno.content is not None:
+              self._index_db.remove(f"{page.hash}/anno/{index}/content")
+            if anno.extracted_text is not None:
+              self._index_db.remove(f"{page.hash}/anno/{index}/extracted")
           self._index_db.remove(page.hash)
 
     self._pdf_parser.fire_file_removed(hash)
