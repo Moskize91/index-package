@@ -1,12 +1,12 @@
 import os
 import sys
-import signal
 import json
-import argparse
 import shutil
+import yaml
+import argparse
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 from tqdm import tqdm
 from index_package import Service, ProgressListeners
 from .display import show_items
@@ -60,7 +60,10 @@ def main():
       shutil.rmtree(workspace_path)
   else:
     embedding: str = package["embedding"]
-    sources: dict = package["sources"]
+    sources: Optional[dict] = package["sources"]
+    if sources is None:
+      sources = {}
+
     service = Service(
       workspace_path=workspace_path,
       embedding_model_id=embedding,
@@ -102,18 +105,27 @@ def _package_and_path(package_path: str) -> tuple[dict, str]:
     raise Exception(f"Path {package_path} not found")
 
   if os.path.isdir(package_path):
-    json_path = os.path.join(package_path, "package.json")
-    if os.path.exists(json_path):
-      package_path = json_path
-    else:
+    did_found = False
+    for ext_name in ("json", "yaml", "yml"):
+      file_path = os.path.join(package_path, f"package.{ext_name}")
+      if os.path.exists(file_path):
+        package_path = file_path
+        did_found = True
+        break
+
+    if not did_found:
       raise Exception(f"package.json not found in {package_path}")
 
   _, ext_name = os.path.splitext(package_path)
-  if ext_name != ".json":
-    raise Exception(f"Invalid file type {ext_name}")
 
-  with open(package_path, "r") as file:
-    package: dict = json.load(file)
+  if ext_name == ".json":
+    with open(package_path, "r") as file:
+      package: dict = json.load(file)
+  elif ext_name == ".yaml" or ext_name == ".yml":
+    with open(package_path, "r") as file:
+      package: dict = yaml.safe_load(file)
+  else:
+    raise Exception(f"Invalid file type {ext_name}")
 
   return package, os.path.dirname(package_path)
 

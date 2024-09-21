@@ -128,6 +128,9 @@ class VectorDB:
       segment_metadata = metadata.copy()
       segment_metadata["seg_start"] = segment.start
       segment_metadata["seg_end"] = segment.end
+      if i == 0:
+        segment_metadata["seg_len"] = len(segments)
+
       ids.append(f"{node_id}/{i}")
       documents.append(segment.text)
       metadatas.append(segment_metadata)
@@ -139,16 +142,23 @@ class VectorDB:
     )
 
   def remove(self, node_id: str):
-    offset: int = 0
-    group_size: int = 25
-    while True:
-      ids = [f"{node_id}/{offset + i}" for i in range(group_size)]
+    result = self._db.get(
+      ids=f"{node_id}/0",
+      include=[IncludeEnum.metadatas],
+    )
+    metadatas = result.get("metadatas")
+    if metadatas is None or len(metadatas) == 0:
+      # segments may be empty, but user maybe don't know it.
+      return
+
+    segments_len = cast(int, metadatas[0].get("seg_len", 1))
+    group_size: int = 45
+
+    for offset in range(0, segments_len, group_size):
+      remain_count = segments_len - offset * group_size
+      ids_len = min(group_size, remain_count)
+      ids = [f"{node_id}/{offset + i}" for i in range(ids_len)]
       self._db.delete(ids=ids)
-      offset += group_size
-      id = f"{node_id}/{offset}"
-      result = self._db.get(ids=id)
-      if len(result.get("ids")) == 0:
-        break
 
 class _EmbeddingFunction(EmbeddingFunction):
   def __init__(self, model_id: str):
