@@ -1,2 +1,3 @@
 @echo off
+echo Starting the index-package service...
 ..\..\.venv\Scripts\python.exe ..\..\bin\index_for_windows.py start -p ..\package.yaml
