@@ -29,7 +29,7 @@ def _start_service_loop(args: Args, app: App) -> bool:
     app.signal_handler.mark_complete_input()
     command, package_path = args.parse_args(command_line)
 
-    if app.package_path != package_path:
+    if package_path != ".":
       print("warn: cannot change -p or --package while service is running")
 
     if isinstance(command, CommandStart) or \
