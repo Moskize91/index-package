@@ -1,5 +1,7 @@
 # index-package
 
+> migrate to https://github.com/oomol-lab/parper-rag
+
 # 安装
 
 需要 Python 环境，执行如下命令创建 Python 的 `venv` 环境。
