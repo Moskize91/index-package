@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from sqlite3 import Cursor
-from index_package.sqlite3_pool import register_table_creators, SQLite3Pool
+from index_package.sqlite3_pool import register_table_creators
 
 
 @dataclass
@@ -20,13 +20,6 @@ class File:
     return self.children is not None
 
 class Model:
-  def __init__(self, db_path: str):
-    self._db: SQLite3Pool = SQLite3Pool("scanner", db_path)
-
-  @property
-  def db(self) -> SQLite3Pool:
-    return self._db
-
   def scopes(self, cursor: Cursor) -> list[Scope]:
     cursor.execute("SELECT name, path FROM scopes ORDER BY name")
     rows = cursor.fetchall()
@@ -85,7 +78,7 @@ class Model:
       return "/".join(children)
 
 def _create_tables(cursor: Cursor):
-  cursor.execute('''
+  cursor.execute("""
     CREATE TABLE files (
       id INTEGER PRIMARY KEY,
       scope TEXT NOT NULL,
@@ -93,13 +86,13 @@ def _create_tables(cursor: Cursor):
       mtime REAL NOT NULL,
       children TEXT
     )
-  ''')
-  cursor.execute('''
+  """)
+  cursor.execute("""
     CREATE TABLE scopes (
       name TEXT PRIMARY KEY,
       path TEXT NOT NULL
     )
-  ''')
+  """)
   cursor.execute("""
     CREATE UNIQUE INDEX idx_files ON files (scope, path)
   """)

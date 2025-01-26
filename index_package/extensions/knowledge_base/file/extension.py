@@ -4,7 +4,7 @@ from typing import cast
 from dataclasses import dataclass
 from sqlite3 import Cursor, Connection
 
-from index_package.extensions.types import KnowledgeBaseScanningContext
+from index_package.extensions.types import KnowledgeBaseScanningContext, KnowledgeBaseEventsDatabase
 from .model import File, Scope, Model
 
 @dataclass
@@ -14,9 +14,9 @@ class _Context:
   conn: Connection
 
 class FileExtension:
-  def __init__(self, db_path: str):
-    self._db_path: str = db_path
-    self._model: Model = Model(db_path)
+  def __init__(self, events_db: KnowledgeBaseEventsDatabase):
+    self._events_db: KnowledgeBaseEventsDatabase = events_db
+    self._model: Model = Model()
 
   @property
   def id(self) -> str:
@@ -27,7 +27,7 @@ class FileExtension:
     if len(parts) != 2:
       raise ValueError(f"Invalid source_id: {source_id}")
 
-    with self._model.db.connect() as (cursor, _):
+    with self._events_db.db.connect() as (cursor, _):
       scope_name, path = parts
       scope = self._model.scope(cursor, scope_name)
       if scope is None:
@@ -35,7 +35,7 @@ class FileExtension:
       return self._model.file(cursor, scope_name, path)
 
   def scan(self, context: KnowledgeBaseScanningContext):
-    with self._model.db.connect() as (cursor, conn):
+    with self._events_db.db.connect() as (cursor, conn):
       ctx = _Context(ctx=context, cursor=cursor, conn=conn)
       for scope in self._model.scopes(cursor):
         self._scan_scope(ctx, scope)
@@ -43,7 +43,7 @@ class FileExtension:
   def _scan_scope(self, context: _Context, scope: Scope):
     next_relative_paths: list[str] = [os.path.sep]
     while len(next_relative_paths) > 0:
-      context.assert_continue()
+      context.ctx.assert_continue()
       relative_path = next_relative_paths.pop()
       children = self._scan_dir(context, scope, relative_path)
       if children is not None:
@@ -124,17 +124,17 @@ class FileExtension:
         if new_file.is_dir:
           source_id = f"{scope.name}/{new_file.path}"
           ext_name = os.path.splitext(new_file.path)[1]
-          context.ctx.report_added_source(source_id, ext_name, new_file.mtime)
+          self._events_db.report_added_source(source_id, ext_name, new_file.mtime)
       else:
         source_id = f"{scope.name}/{new_file.path}"
         self._model.update_file(context.cursor, new_file)
         if old_file.is_dir and not new_file.is_dir:
           ext_name = os.path.splitext(new_file.path)[1]
-          context.ctx.report_added_source(source_id, ext_name, new_file.mtime)
+          self._events_db.report_added_source(source_id, ext_name, new_file.mtime)
         elif not old_file.is_dir and not new_file.is_dir:
-          context.ctx.report_updated_source(source_id, new_file.mtime)
+          self._events_db.report_updated_source(source_id, new_file.mtime)
         elif not old_file.is_dir and new_file.is_dir:
-          context.ctx.report_removed_source(source_id)
+          self._events_db.report_removed_source(source_id)
 
     elif old_file is not None:
       self._model.remove_file(context.cursor, scope.name, old_file.path)
@@ -142,7 +142,7 @@ class FileExtension:
         self._handle_removed_folder(context, old_file)
       else:
         source_id = f"{scope.name}/{old_file.path}"
-        context.ctx.report_removed_source(source_id)
+        self._events_db.report_removed_source(source_id)
 
   def _commit_release_children(self, context: _Context, scope: Scope, old_file: File, new_file: File | None):
     to_remove = set(cast(list[str], old_file.children))
@@ -161,7 +161,7 @@ class FileExtension:
         self._handle_removed_folder(context.cursor, child_file)
       else:
         source_id = f"{scope.name}/{child_file.path}"
-        context.ctx.report_removed_source(source_id)
+        self._events_db.report_removed_source(source_id)
 
   def _ignore_dir(self, path: str) -> bool:
     # iBook will save epub as a directory
@@ -178,4 +178,4 @@ class FileExtension:
         if file.is_dir:
           self._handle_removed_folder(context, file)
         else:
-          context.ctx.report_removed_source(f"{file.scope}/{file.path}")
+          self._events_db.report_removed_source(f"{file.scope}/{file.path}")

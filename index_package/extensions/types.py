@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Protocol
+from ..sqlite3_pool import SQLite3Pool
 
 
 class KnowledgeBaseExtension(Protocol):
@@ -15,6 +16,11 @@ class KnowledgeBaseExtension(Protocol):
 
 class KnowledgeBaseScanningContext(Protocol):
   def assert_continue(self) -> None:
+    ...
+
+class KnowledgeBaseEventsDatabase(Protocol):
+  @property
+  def db(self) -> SQLite3Pool:
     ...
 
   def report_added_source(self, id: str, ext_name: str, mtime: float):
