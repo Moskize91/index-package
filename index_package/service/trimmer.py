@@ -23,7 +23,9 @@ QueryItem = Union[PdfQueryItem, PageQueryItem]
 
 @dataclass
 class PagePDFFile:
-  pdf_path: str
+  scope: str
+  path: str
+  device_path: str
   page_index: int
 
 @dataclass
@@ -37,6 +39,7 @@ class PageAnnoQueryItem:
 class PageHighlightSegment:
   start: int
   end: int
+  main: bool
   highlights: list[tuple[int, int]]
 
 def trim_nodes(index: Index, pdf_parser: PdfParser, nodes: list[IndexNode]) -> list[QueryItem]:
@@ -109,7 +112,9 @@ def _trim_page_and_child_type(
     )
     for relative_to in index.get_page_relative_to_pdf(page.hash):
       page_item.pdf_files.append(PagePDFFile(
-        pdf_path=relative_to.pdf_path,
+        scope=relative_to.scope,
+        path=relative_to.path,
+        device_path=relative_to.device_path,
         page_index=relative_to.page_index,
       ))
     page_items_dict[page.hash] = page_item
@@ -118,7 +123,19 @@ def _trim_page_and_child_type(
 
 def _mark_highlights(content: str, segments: list[IndexSegment], ignore_empty_segments: bool) -> list[PageHighlightSegment]:
   content = content.lower()
+  min_rank: tuple[float, float] = (float("inf"), float("inf"))
   highlight_segments: list[PageHighlightSegment] = []
+
+  for segment in segments:
+    if segment.fts5_rank < min_rank[0] or (
+      segment.fts5_rank == min_rank[0] and \
+      segment.vector_distance < min_rank[1]
+    ):
+      min_rank = (
+        segment.fts5_rank,
+        segment.vector_distance,
+      )
+
   for segment in segments:
     start = segment.start
     end = segment.end
@@ -133,6 +150,10 @@ def _mark_highlights(content: str, segments: list[IndexSegment], ignore_empty_se
         start=start,
         end=end,
         highlights=highlights,
+        main=(
+          segment.fts5_rank == min_rank[0] and \
+          segment.vector_distance == min_rank[1]
+        ),
       ))
   return highlight_segments
 

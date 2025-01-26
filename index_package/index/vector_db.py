@@ -1,18 +1,18 @@
 import re
+import torch
 
 from typing import cast, Any, Optional, Callable, Literal
 from numpy import ndarray, array
-from numpy.typing import ArrayLike
 from sentence_transformers import SentenceTransformer
 from chromadb import PersistentClient
 from chromadb.api import ClientAPI
 from chromadb.api.types import ID, EmbeddingFunction, IncludeEnum, Documents, Embedding, Embeddings, Document, Metadata
 from chromadb.utils import distance_functions
 
+from ..segmentation import Segment
 from .types import IndexNode, IndexSegment, IndexNodeMatching
-from ..segmentation.segmentation import Segment
 
-_DistanceFunction = Callable[[ArrayLike, ArrayLike], float]
+_DistanceFunction = Callable[[distance_functions.Vector, distance_functions.Vector], float]
 DistanceSpace = Literal["l2", "ip", "cosine"]
 
 class VectorDB:
@@ -97,6 +97,8 @@ class VectorDB:
         node_segments.append(IndexSegment(
           start=start,
           end=end,
+          fts5_rank=0.0,
+          vector_distance=distance,
           matched_tokens=[],
         ))
         if node_metadata is None:
@@ -155,8 +157,7 @@ class VectorDB:
     group_size: int = 45
 
     for offset in range(0, segments_len, group_size):
-      remain_count = segments_len - offset * group_size
-      ids_len = min(group_size, remain_count)
+      ids_len = min(group_size, segments_len - offset)
       ids = [f"{node_id}/{offset + i}" for i in range(ids_len)]
       self._db.delete(ids=ids)
 
@@ -167,7 +168,10 @@ class _EmbeddingFunction(EmbeddingFunction):
 
   def __call__(self, input: Documents) -> Embeddings:
     if self._model is None:
-      self._model = SentenceTransformer(self._model_id)
+      self._model = SentenceTransformer(
+        model_name_or_path=self._model_id,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+      )
     result = self._model.encode(input)
     if not isinstance(result, ndarray):
       raise ValueError("Model output is not a numpy array")
