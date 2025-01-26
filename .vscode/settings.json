@@ -10,6 +10,7 @@
     "langid",
     "pdfplumber",
     "pikepdf",
+    "pylint",
     "spacy",
     "venv"
   ]
