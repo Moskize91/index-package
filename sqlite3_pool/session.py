@@ -9,17 +9,15 @@ _THREAD_POOL = threading.local()
 _MAX_STACK_SIZE = 2
 
 def build_thread_pool():
-  global _THREAD_POOL
   if not hasattr(_THREAD_POOL, "value"):
-    setattr(_THREAD_POOL, "value", _ThreadPool())
+    setattr(_THREAD_POOL, "value", ThreadPool())
 
 def release_thread_pool():
-  global _THREAD_POOL
   if hasattr(_THREAD_POOL, "value"):
+    # pylint: disable=E1101
     getattr(_THREAD_POOL, "value").release()
 
-def get_thread_pool() -> Optional[_ThreadPool]:
-  global _THREAD_POOL
+def get_thread_pool() -> Optional[ThreadPool]:
   if hasattr(_THREAD_POOL, "value"):
     return getattr(_THREAD_POOL, "value")
   return None
@@ -55,7 +53,7 @@ class SQLite3ConnectionSession:
   def __exit__(self, exc_type, exc_value, traceback):
     self.close()
 
-class _ThreadPool():
+class ThreadPool():
   def __init__(self):
     self._stacks: dict[str, list[sqlite3.Connection]] = {}
 
@@ -66,7 +64,6 @@ class _ThreadPool():
     return stack.pop()
 
   def send_back(self, format_name: str, conn: sqlite3.Connection):
-    global _MAX_STACK_SIZE
     stack = self._stack(format_name)
     if len(stack) >= _MAX_STACK_SIZE:
       conn.close()

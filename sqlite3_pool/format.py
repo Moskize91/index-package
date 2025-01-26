@@ -13,7 +13,6 @@ def register_table_creators(format_name: str, create_table: Callable[[sqlite3.Cu
   get_format(format_name).register(create_table)
 
 def get_format(format_name: str) -> _SQLite3Format:
-  global _FORMATS_LOCK, _FORMATS
   with _FORMATS_LOCK:
     pool: Optional[_SQLite3Format] = _FORMATS.get(format_name, None)
     if pool is None:
@@ -30,7 +29,7 @@ class _SQLite3Format:
   def register(self, create_table: Callable[[sqlite3.Cursor], None]) -> None:
     with self._lock:
       if self._lock_table_creators:
-        raise Exception("Cannot register table creator after created any pools")
+        raise RuntimeError("Cannot register table creator after created any pools")
       self._table_creators.append(create_table)
 
   def create_tables(self, path: str):

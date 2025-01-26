@@ -2,7 +2,6 @@ import spacy
 import langid
 import threading
 
-from typing import Optional
 from dataclasses import dataclass
 from spacy.language import Language
 from spacy.tokens import Doc

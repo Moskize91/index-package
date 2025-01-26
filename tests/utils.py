@@ -11,7 +11,6 @@ def _setup():
 _TEMP_PATH: str = _setup()
 
 def get_temp_path(path: str) -> str:
-  global _TEMP_PATH
   temp_path = os.path.join(_TEMP_PATH, path)
   if not os.path.exists(temp_path):
     os.makedirs(temp_path)

@@ -27,11 +27,11 @@ class PdfMetadata:
   producer: Optional[str]
 
 class PdfPage:
-  def __init__(self, parent, pdf_id: int, index: int, hash: str):
+  def __init__(self, parent: PdfParser, pdf_id: int, index: int, hash: str):
     self.index: int = index
     self.hash: str = hash
-    self._parent = parent
-    self._pdf_id = pdf_id
+    self._parent: PdfParser = parent
+    self._pdf_id: int = pdf_id
     self._annotations: Optional[list[Annotation]] = None
     self._snapshot: Optional[str] = None
 
@@ -120,7 +120,7 @@ class PdfParser:
       )
 
   def pdf_or_none(self, hash: str) -> Optional[Pdf]:
-   with self._db.connect() as (cursor, _):
+    with self._db.connect() as (cursor, _):
       pdf_id = self._pdf_id(cursor, hash)
       if pdf_id is None:
         return None

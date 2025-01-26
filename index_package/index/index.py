@@ -122,7 +122,7 @@ class Index:
     elif event.kind == EventKind.Removed:
       operation = HandleFileOperation.Remove
     else:
-      raise Exception(f"Unknown event kind: {event.kind}")
+      raise ValueError(f"Unknown event kind: {event.kind}")
 
     listener(StartHandleFileEvent(
       path=path,

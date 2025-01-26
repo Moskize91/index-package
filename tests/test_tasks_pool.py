@@ -61,7 +61,7 @@ class TestTasksPool(unittest.TestCase):
 
   def _crash_handler(self, _: int, _2: int):
     time.sleep(0.3) # make sure not interrupting another task
-    raise Exception("Task failed")
+    raise RuntimeError("Task failed")
 
   def test_interrupt_task(self):
     pool = TasksPool[int](

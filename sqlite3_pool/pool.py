@@ -11,7 +11,6 @@ _LOCK = threading.Lock()
 
 class SQLite3Pool:
   def __init__(self, format_name: str, path: str) -> None:
-    global _LOCK
     with _LOCK:
       get_format(format_name).create_tables(path)
     self._format_name: str = format_name
@@ -27,6 +26,7 @@ class SQLite3Pool:
     conn: Optional[sqlite3.Connection] = None
 
     if pool is not None:
+      # pylint: disable=E1101
       conn = pool.get(self._format_name)
 
     if conn is None:
@@ -40,6 +40,7 @@ class SQLite3Pool:
   def _send_back(self, conn: sqlite3.Connection) -> None:
     pool = get_thread_pool()
     if pool is not None:
+      # pylint: disable=E1101
       pool.send_back(self._format_name, conn)
     else:
       conn.close()
@@ -50,7 +51,7 @@ class SQLite3Pool:
 
   @property
   def table_names(self) -> list[str]:
-    with self.connect() as (cursor, conn):
+    with self.connect() as (cursor, _):
       table_names: list[str] = []
       cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
       tables = cursor.fetchall()

@@ -31,7 +31,7 @@ class EventParser:
       )
       row = cursor.fetchone()
       if row is None:
-        raise Exception(f"Event not found: {event_id}")
+        raise ValueError(f"Event not found: {event_id}")
 
       return Event(
         id=event_id,

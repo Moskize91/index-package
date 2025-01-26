@@ -80,11 +80,7 @@ class TasksPool(Generic[E]):
 
   def start(self) -> TasksPool:
     for index in range(self._max_workers):
-      thread = threading.Thread(
-        target=lambda:self._start_thread_loop(index),
-        daemon=True,
-      )
-      self._threads.append(thread)
+      self._threads.append(self._create_thread(index))
     for thread in self._threads:
       thread.start()
     return self
@@ -111,6 +107,12 @@ class TasksPool(Generic[E]):
     for thread in self._threads:
       thread.join()
     return self._state
+
+  def _create_thread(self, index: int):
+    return threading.Thread(
+      target=lambda:self._start_thread_loop(index),
+      daemon=True,
+    )
 
   # this function is running in daemon thread
   def _start_thread_loop(self, index: int):

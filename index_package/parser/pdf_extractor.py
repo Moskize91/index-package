@@ -43,20 +43,19 @@ def _convert_to_utc(timestamp: str):
   pattern = r"D:(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})([\+\-]\d{2})'(\d{2})"
   match = re.match(pattern, timestamp)
   if match:
-      year, month, day, hour, minute, second, timezone_offset_hour, timezone_offset_minute = match.groups()
-      dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
-      utc_offset = timedelta(hours=int(timezone_offset_hour), minutes=int(timezone_offset_minute))
-      dt_adjusted = dt - utc_offset
-      return dt_adjusted.strftime("%Y-%m-%d %H:%M:%S")
+    year, month, day, hour, minute, second, timezone_offset_hour, timezone_offset_minute = match.groups()
+    dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+    utc_offset = timedelta(hours=int(timezone_offset_hour), minutes=int(timezone_offset_minute))
+    dt_adjusted = dt - utc_offset
+    return dt_adjusted.strftime("%Y-%m-%d %H:%M:%S")
   else:
-      return None
+    return None
 
 class PdfExtractor:
   def __init__(self, pages_path: str):
     self._pages_path: str = pages_path
 
   def extract_page(self, page_hash: str):
-    global _PDF_EXT, _SNAPSHOT_EXT, _ANNOTATION_EXT
     annotations: list[Annotation] = []
     snapshot: str = ""
 
@@ -95,14 +94,12 @@ class PdfExtractor:
         json.dump(annotation_json, file, ensure_ascii=False)
 
   def remove_page(self, page_hash: str):
-    global _PDF_EXT, _SNAPSHOT_EXT, _ANNOTATION_EXT
     for ext_name in (_PDF_EXT, _SNAPSHOT_EXT, _ANNOTATION_EXT):
       file_path = os.path.join(self._pages_path, f"{page_hash}.{ext_name}")
       if os.path.exists(file_path):
         os.remove(file_path)
 
   def read_annotations(self, page_hash: str) -> list[Annotation]:
-    global _ANNOTATION_EXT
     annotations: list[Annotation] = []
     file_path = os.path.join(self._pages_path, f"{page_hash}.{_ANNOTATION_EXT}")
     if not os.path.exists(file_path):
@@ -115,7 +112,6 @@ class PdfExtractor:
     return annotations
 
   def read_snapshot(self, page_hash: str) -> str:
-    global _SNAPSHOT_EXT
     file_path = os.path.join(self._pages_path, f"{page_hash}.{_SNAPSHOT_EXT}")
     if not os.path.exists(file_path):
       return ""

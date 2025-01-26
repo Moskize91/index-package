@@ -3,7 +3,6 @@ import time
 import shutil
 import unittest
 
-from typing import Generator
 from index_package.scanner import Scanner, EventKind, EventTarget
 from tests.utils import get_temp_path
 
@@ -127,7 +126,7 @@ class TestScanner(unittest.TestCase):
   def _del_file(self, base_path: str, path: str):
     abs_file_path = os.path.join(base_path, path)
     if not os.path.exists(abs_file_path):
-      return;
+      return
     if os.path.isfile(abs_file_path):
       os.remove(abs_file_path)
     elif os.path.isdir(abs_file_path):
