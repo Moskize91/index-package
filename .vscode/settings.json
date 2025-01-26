@@ -3,26 +3,14 @@
     "editor.tabSize": 2,
     "editor.insertSpaces": true
   },
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
   "cSpell.words": [
-    "annot",
-    "annots",
     "chromadb",
-    "Embeddable",
-    "extratransference",
-    "hnsw",
-    "lastrowid",
-    "metadatas",
-    "ndarray",
+    "langid",
     "pdfplumber",
-    "pdfs",
     "pikepdf",
-    "rowid",
-    "sents",
-    "shibing",
     "spacy",
-    "termcolor",
-    "tqdm",
-    "uids",
     "venv"
   ]
 }

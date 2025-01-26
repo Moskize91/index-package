@@ -21,10 +21,14 @@ class IndexNode:
 class IndexSegment:
   start: int
   end: int
+  fts5_rank: float
+  vector_distance: float
   matched_tokens: list[str]
 
 @dataclass
 class PageRelativeToPDF:
   pdf_hash: str
-  pdf_path: str
+  scope: str
+  path: str
+  device_path: str
   page_index: int

@@ -29,14 +29,15 @@ class TestScanner(unittest.TestCase):
     self._set_file(scan_path, "./universe/sun/sun2", "this is sun1")
     self._set_file(scan_path, "./universe/moon/moon1", "this is moon1")
 
-    parser = scanner.event_parser()
     path_list: list[str] = []
 
     for event_id in scanner.scan():
-      with parser.parse(event_id) as event:
+      event = scanner.parse_event(event_id)
+      try:
         path_list.append(event.path)
+      finally:
+        event.close()
 
-    parser.close()
     path_list.sort()
     self.assertListEqual(path_list, [
       "/",
@@ -95,21 +96,22 @@ class TestScanner(unittest.TestCase):
     list[tuple[str, EventTarget]],
     list[tuple[str, EventTarget]],
   ]:
-    parser = scanner.event_parser()
     added_path_list: list[tuple[str, EventTarget]] = []
     removed_path_list: list[tuple[str, EventTarget]] = []
     updated_path_list: list[tuple[str, EventTarget]] = []
 
     for event_id in scanner.scan():
-      with parser.parse(event_id) as event:
+      event = scanner.parse_event(event_id)
+      try:
         if event.kind == EventKind.Added:
           added_path_list.append((event.path, event.target))
         elif event.kind == EventKind.Removed:
           removed_path_list.append((event.path, event.target))
         elif event.kind == EventKind.Updated:
           updated_path_list.append((event.path, event.target))
+      finally:
+        event.close()
 
-    parser.close()
     for path_list in [added_path_list, removed_path_list, updated_path_list]:
       path_list.sort(key=lambda x: x[0])
 
