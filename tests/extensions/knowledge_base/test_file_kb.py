@@ -4,21 +4,22 @@ import shutil
 import unittest
 
 from index_package.scanner import Scanner, EventKind, EventTarget
+from index_package.extensions.knowledge_base.file import FileExtension
 from tests.utils import get_temp_path
 
-class TestScanner(unittest.TestCase):
+class TestFileKB(unittest.TestCase):
 
-  def test_scanning_folder(self):
+  def test_file_knowledge_base(self):
     scan_path, db_path = self.setup_paths()
-    scanner = Scanner(db_path)
-    scanner.commit_sources({
+    kb = FileExtension(db_path)
+    kb.commit_sources({
       "test": scan_path,
     })
-    self._test_insert_files(scan_path, scanner)
+    self._test_insert_files(scan_path, kb)
     time.sleep(0.1)
-    self._test_modify_part_of_files(scan_path, scanner)
+    self._test_modify_part_of_files(scan_path, kb)
     time.sleep(0.1)
-    self._test_delete_recursively(scan_path, scanner)
+    self._test_delete_recursively(scan_path, kb)
 
   def _test_insert_files(self, scan_path: str, scanner: Scanner):
     self._set_file(scan_path, "./foobar", "hello world")
