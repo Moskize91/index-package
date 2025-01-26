@@ -3,19 +3,23 @@ import os
 from typing import cast
 from dataclasses import dataclass
 from sqlite3 import Cursor, Connection
+from index_package.sqlite3_pool import SQLite3Pool
 
-from index_package.extensions.types import KnowledgeBaseScanningContext, KnowledgeBaseEventsDatabase
+from ..types import Context, Event, EventKind
+from ..events import EventsDatabase
 from .model import File, Scope, Model
+
 
 @dataclass
 class _Context:
-  ctx: KnowledgeBaseScanningContext
+  ctx: Context
   cursor: Cursor
   conn: Connection
 
 class FileExtension:
-  def __init__(self, events_db: KnowledgeBaseEventsDatabase):
-    self._events_db: KnowledgeBaseEventsDatabase = events_db
+  def __init__(self, db_path: str):
+    self._db: SQLite3Pool = SQLite3Pool("file", db_path)
+    self._events_db: EventsDatabase = EventsDatabase()
     self._model: Model = Model()
 
   @property
@@ -27,15 +31,24 @@ class FileExtension:
     if len(parts) != 2:
       raise ValueError(f"Invalid source_id: {source_id}")
 
-    with self._events_db.db.connect() as (cursor, _):
+    with self._db.connect() as (cursor, _):
       scope_name, path = parts
       scope = self._model.scope(cursor, scope_name)
       if scope is None:
         return None
       return self._model.file(cursor, scope_name, path)
 
-  def scan(self, context: KnowledgeBaseScanningContext):
-    with self._events_db.db.connect() as (cursor, conn):
+  def oldest_event(self, kind: EventKind | None) -> Event | None:
+    with self._db.connect() as (cursor, _):
+      return self._events_db.oldest_event(cursor, kind)
+
+  def remove_event(self, event: Event):
+    with self._db.connect() as (cursor, conn):
+      self._events_db.remove_event(cursor, event.id)
+      conn.commit()
+
+  def scan(self, context: Context):
+    with self._db.connect() as (cursor, conn):
       ctx = _Context(ctx=context, cursor=cursor, conn=conn)
       for scope in self._model.scopes(cursor):
         self._scan_scope(ctx, scope)
@@ -119,30 +132,30 @@ class FileExtension:
     new_file: File | None
   ):
     if new_file is not None:
+      ext_name = os.path.splitext(new_file.path)[1]
       if old_file is None:
         self._model.insert_file(context.cursor, new_file)
         if new_file.is_dir:
           source_id = f"{scope.name}/{new_file.path}"
-          ext_name = os.path.splitext(new_file.path)[1]
-          self._events_db.report_added_source(source_id, ext_name, new_file.mtime)
+          self._events_db.report_added(context.cursor, source_id, ext_name, new_file.mtime)
       else:
         source_id = f"{scope.name}/{new_file.path}"
         self._model.update_file(context.cursor, new_file)
         if old_file.is_dir and not new_file.is_dir:
-          ext_name = os.path.splitext(new_file.path)[1]
-          self._events_db.report_added_source(source_id, ext_name, new_file.mtime)
+          self._events_db.report_added(context.cursor, source_id, ext_name, new_file.mtime)
         elif not old_file.is_dir and not new_file.is_dir:
-          self._events_db.report_updated_source(source_id, new_file.mtime)
+          self._events_db.report_updated(context.cursor, source_id, ext_name, new_file.mtime)
         elif not old_file.is_dir and new_file.is_dir:
-          self._events_db.report_removed_source(source_id)
+          self._events_db.report_removed(context.cursor, source_id, ext_name, old_file.mtime)
 
     elif old_file is not None:
+      ext_name = os.path.splitext(old_file.path)[1]
       self._model.remove_file(context.cursor, scope.name, old_file.path)
       if old_file.is_dir:
         self._handle_removed_folder(context, old_file)
       else:
         source_id = f"{scope.name}/{old_file.path}"
-        self._events_db.report_removed_source(source_id)
+        self._events_db.report_removed(context.cursor, source_id, ext_name, old_file.mtime)
 
   def _commit_release_children(self, context: _Context, scope: Scope, old_file: File, new_file: File | None):
     to_remove = set(cast(list[str], old_file.children))
@@ -161,7 +174,8 @@ class FileExtension:
         self._handle_removed_folder(context.cursor, child_file)
       else:
         source_id = f"{scope.name}/{child_file.path}"
-        self._events_db.report_removed_source(source_id)
+        ext_name = os.path.splitext(child_file.path)[1]
+        self._events_db.report_removed(context.cursor, source_id, ext_name, child_file.mtime)
 
   def _ignore_dir(self, path: str) -> bool:
     # iBook will save epub as a directory
@@ -178,4 +192,6 @@ class FileExtension:
         if file.is_dir:
           self._handle_removed_folder(context, file)
         else:
-          self._events_db.report_removed_source(f"{file.scope}/{file.path}")
+          source_id = f"{file.scope}/{file.path}"
+          ext_name = os.path.splitext(file.path)[1]
+          self._events_db.report_removed(context.cursor, source_id, ext_name, file.mtime)

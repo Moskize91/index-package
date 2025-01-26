@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from sqlite3 import Cursor
 from index_package.sqlite3_pool import register_table_creators
+from ..events import create_events_tables
 
 
 @dataclass
@@ -78,6 +79,7 @@ class Model:
       return "/".join(children)
 
 def _create_tables(cursor: Cursor):
+  create_events_tables(cursor)
   cursor.execute("""
     CREATE TABLE files (
       id INTEGER PRIMARY KEY,
@@ -97,4 +99,4 @@ def _create_tables(cursor: Cursor):
     CREATE UNIQUE INDEX idx_files ON files (scope, path)
   """)
 
-register_table_creators("knowledge_base", _create_tables)
+register_table_creators("file", _create_tables)
