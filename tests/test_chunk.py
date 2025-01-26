@@ -70,4 +70,4 @@ class TestChunk(unittest.TestCase):
       self.assertEqual(c1.uid, c2.uid)
       self.assertEqual(c1.path, c2.path)
       self.assertEqual(c1.meta, c2.meta)
-      self.assertEqual(c1._parent_uid, c2._parent_uid)
+      self.assertEqual(c1.parent_uid, c2.parent_uid)

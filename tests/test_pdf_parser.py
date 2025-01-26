@@ -68,7 +68,7 @@ class TestPdfParser(unittest.TestCase):
 
     self.assertListEqual(
       hash_of_pdf,
-      self._read_hash_of_files(parser._pages_path),
+      self._read_hash_of_files(parser.pages_path),
     )
     added_page_hashes.clear()
     removed_page_hashes.clear()
@@ -88,7 +88,7 @@ class TestPdfParser(unittest.TestCase):
     hash_of_pdf.sort()
     self.assertListEqual(
       hash_of_pdf,
-      self._read_hash_of_files(parser._pages_path),
+      self._read_hash_of_files(parser.pages_path),
     )
     added_page_hashes.clear()
     removed_page_hashes.clear()
@@ -106,7 +106,7 @@ class TestPdfParser(unittest.TestCase):
     self.assertFalse(parser.pdf_has_cached(file1_hash))
     self.assertListEqual(
       [],
-      self._read_hash_of_files(parser._pages_path),
+      self._read_hash_of_files(parser.pages_path),
     )
 
   def test_extract_annotation(self):

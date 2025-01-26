@@ -11,7 +11,7 @@ class Chunk:
   uid: str
   path: str
   meta: Optional[Any]
-  _parent_uid: str
+  parent_uid: str
 
 @dataclass
 class ChunkChildRef:
@@ -67,14 +67,14 @@ class ChunkHub:
     return Chunk(
       uid=uid,
       meta=meta,
-      _parent_uid=empty_str(parent_uid),
+      parent_uid=empty_str(parent_uid),
       path=empty_str(path),
     )
 
   def get_parent(self, chunk: Chunk) -> Optional[Chunk]:
-    if chunk._parent_uid == "":
+    if chunk.parent_uid == "":
       return None
-    return self.get(chunk._parent_uid)
+    return self.get(chunk.parent_uid)
 
   def get_child(self, parent: Chunk, path: str) -> Optional[Chunk]:
     self._cursor.execute(
@@ -94,7 +94,7 @@ class ChunkHub:
       uid=uid,
       path=path,
       meta=meta,
-      _parent_uid=parent.uid,
+      parent_uid=parent.uid,
     )
 
   def get_child_refs(self, parent: Chunk) -> list[ChunkChildRef]:
@@ -147,7 +147,7 @@ class ChunkHub:
     chunk = Chunk(
       uid=uid,
       meta=meta,
-      _parent_uid=empty_str(parent_uid),
+      parent_uid=empty_str(parent_uid),
       path=empty_str(path),
     )
     self._conn.commit()
