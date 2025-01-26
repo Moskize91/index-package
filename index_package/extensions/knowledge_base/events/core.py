@@ -41,7 +41,7 @@ class EventsDatabase:
 
     if row is None:
       cursor.execute(
-        "INSERT INTO events (id, kind, ext_name, mtime, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO events (id, kind, ext_name, mtime, created_at) VALUES (?, ?, ?, ?, ?)",
         (source_id, EventKind.Added.value, ext_name, mtime, time()),
       )
     else:
@@ -123,7 +123,7 @@ class EventsDatabase:
 def create_events_tables(cursor: Cursor):
   cursor.execute("""
     CREATE TABLE events (
-      id TEXT PRIMARY NOT KEY,
+      id TEXT PRIMARY KEY,
       kind INTEGER NOT NULL,
       ext_name TEXT NOT NULL,
       mtime REAL NOT NULL,
@@ -131,6 +131,8 @@ def create_events_tables(cursor: Cursor):
     )
   """)
   cursor.execute("""
-    CREATE INDEX idx_kind_events ON events (kind, id, created_at)
     CREATE INDEX idx_events ON events (id, created_at)
+  """)
+  cursor.execute("""
+    CREATE INDEX idx_kind_events ON events (kind, id, created_at)
   """)

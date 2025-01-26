@@ -107,7 +107,7 @@ class FileExtension:
     elif is_dir:
       children = sorted(os.listdir(abs_path))
 
-    new_file = File(scope, relative_path, mtime, children)
+    new_file = File(scope.name, relative_path, mtime, children)
     return new_file, file_never_change
 
   def _commit_file_updation(self, context: _Context, scope: Scope, old_file: File | None, new_file: File | None):

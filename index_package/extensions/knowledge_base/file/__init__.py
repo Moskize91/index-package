@@ -1,1 +1,1 @@
-from .extension import FileExtension
+from .core import FileKnowledgeBase
