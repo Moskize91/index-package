@@ -17,10 +17,10 @@ class _Context:
   conn: Connection
 
 class FileExtension:
-  def __init__(self, db_path: str):
-    self._db: SQLite3Pool = SQLite3Pool("file", db_path)
-    self._events_db: EventsDatabase = EventsDatabase()
-    self._model: Model = Model()
+  def __init__(self, db: SQLite3Pool, events_db: EventsDatabase, model: Model):
+    self._db: SQLite3Pool = db
+    self._events_db: EventsDatabase = events_db
+    self._model: Model = model
 
   @property
   def id(self) -> str:

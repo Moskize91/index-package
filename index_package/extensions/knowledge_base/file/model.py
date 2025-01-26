@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from sqlite3 import Cursor
+from typing import Generator
 from index_package.sqlite3_pool import register_table_creators
 from ..events import create_events_tables
 
@@ -36,6 +37,30 @@ class Model:
       return None
     return Scope(name=row[0], path=row[1])
 
+  def put_scope(self, cursor: Cursor, scope: Scope):
+    cursor.execute(
+      "SELECT path FROM scopes WHERE name = ?",
+      (scope.name,)
+    )
+    row = cursor.fetchone()
+    if row is None:
+      cursor.execute(
+        "INSERT INTO scopes (name, path) VALUES (?, ?)",
+        (scope.name, scope.path),
+      )
+    elif row[0] != scope.path:
+      cursor.execute(
+        "UPDATE scopes SET path = ? WHERE name = ?",
+        (scope.path, scope.name),
+      )
+
+
+  def remove_scope(self, cursor: Cursor, name: str):
+    cursor.execute(
+      "DELETE FROM scopes WHERE name = ?",
+      (name,),
+    )
+
   def file(self, cursor: Cursor, scope: str, path: str) -> File | None:
     cursor.execute(
       "SELECT mtime, children FROM files WHERE scope = ? AND path = ?",
@@ -45,12 +70,21 @@ class Model:
     if row is None:
       return None
 
-    mtime, encoded_children = row
-    children: list[str] | None = None
-    if encoded_children is not None:
-      children = encoded_children.split("/")
+    mtime: float = row[0]
+    children = self._decode_children(row[1])
 
     return File(scope=scope, path=path, mtime=mtime, children=children)
+
+  def files(self, cursor: Cursor, scope: str) -> Generator[File, None, None]:
+    cursor.execute(
+      "SELECT path, mtime, children FROM files WHERE scope = ?",
+      (scope,),
+    )
+    for row in cursor.fetchall():
+      path: str = row[0]
+      mtime: float = row[1]
+      children = self._decode_children(row[2])
+      yield File(scope, path, mtime, children)
 
   def insert_file(self, cursor: Cursor, file: File):
     children = self._encode_children(file.children)
@@ -72,11 +106,23 @@ class Model:
       (scope, path),
     )
 
+  def remove_files(self, cursor: Cursor, scope: str):
+    cursor.execute(
+      "DELETE FROM files WHERE scope = ?",
+      (scope,),
+    )
+
   def _encode_children(self, children: list[str] | None):
     if children is None:
       return None
     else:
       return "/".join(children)
+
+  def _decode_children(self, encoded: str | None) -> list[str] | None:
+    if encoded is None:
+      return None
+    else:
+      return encoded.split("/")
 
 def _create_tables(cursor: Cursor):
   create_events_tables(cursor)
