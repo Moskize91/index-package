@@ -3,9 +3,9 @@ import json
 
 from typing import Generator
 from sqlite3 import Cursor
-from sqlite3_pool import register_table_creators, SQLite3Pool
 from .types import IndexNode, IndexSegment, IndexNodeMatching
 from ..segmentation import Segment
+from ..sqlite3_pool import register_table_creators, SQLite3Pool
 
 _Segment = tuple[int, int, list[str]]
 _INVALID_TOKENS = set(["", "NEAR", "AND", "OR", "NOT"])

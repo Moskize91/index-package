@@ -1,7 +1,6 @@
 import os
 import unittest
 
-from typing import Optional
 from index_package.parser import PdfParser
 from index_package.scanner import Scope, Event, EventKind, EventTarget
 from index_package.segmentation import Segment, Segmentation
@@ -209,5 +208,5 @@ class _Scope(Scope):
   def scopes(self) -> list[str]:
     return list(self._sources.keys())
 
-  def scope_path(self, scope: str) -> Optional[str]:
+  def scope_path(self, scope: str) -> str | None:
     return self._sources.get(scope, None)

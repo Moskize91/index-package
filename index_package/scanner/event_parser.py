@@ -1,6 +1,5 @@
-from typing import Optional
 from dataclasses import dataclass
-from sqlite3_pool import SQLite3Pool
+from ..sqlite3_pool import SQLite3Pool
 from .events import EventKind, EventTarget
 
 @dataclass
@@ -11,7 +10,7 @@ class Event:
   scope: str
   path: str
   mtime: float
-  db: Optional[SQLite3Pool] = None
+  db: SQLite3Pool | None = None
 
   def close(self):
     if self.db is not None:
@@ -31,7 +30,7 @@ class EventParser:
       )
       row = cursor.fetchone()
       if row is None:
-        raise Exception(f"Event not found: {event_id}")
+        raise ValueError(f"Event not found: {event_id}")
 
       return Event(
         id=event_id,

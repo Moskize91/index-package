@@ -1,7 +1,7 @@
 import re
 import torch
 
-from typing import cast, Any, Optional, Callable, Literal
+from typing import cast, Callable, Literal
 from numpy import ndarray, array
 from sentence_transformers import SentenceTransformer
 from chromadb import PersistentClient
@@ -79,7 +79,7 @@ class VectorDB:
       if matches is None:
         raise ValueError(f"Invalid ID: {ids[i]}")
       node_id = matches.group(1)
-      metadata: dict[str, Any] = metadatas[i]
+      metadata: dict[str, any] = metadatas[i]
       distance = distances[i]
       start = metadata.pop("seg_start")
       end = metadata.pop("seg_end")
@@ -91,7 +91,7 @@ class VectorDB:
     nodes: list[IndexNode] = []
     for node_id, segments in node2segments.items():
       node_segments: list[IndexSegment] = []
-      node_metadata: Optional[dict] = None
+      node_metadata: dict | None = None
       min_distance: float = float("inf")
       for distance, start, end, metadata in segments:
         node_segments.append(IndexSegment(
@@ -164,7 +164,7 @@ class VectorDB:
 class _EmbeddingFunction(EmbeddingFunction):
   def __init__(self, model_id: str):
     self._model_id: str = model_id
-    self._model: Optional[SentenceTransformer] = None
+    self._model: SentenceTransformer | None = None
 
   def __call__(self, input: Documents) -> Embeddings:
     if self._model is None:

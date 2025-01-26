@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 from sqlite3 import Cursor
-from typing import Optional
-from sqlite3_pool import SQLite3Pool
 
+from ..sqlite3_pool import SQLite3Pool
 from .event_parser import EventTarget
 from .events import record_removed_event
 
@@ -14,7 +13,7 @@ class Scope(ABC):
     pass
 
   @abstractmethod
-  def scope_path(self, scope: str) -> Optional[str]:
+  def scope_path(self, scope: str) -> str | None:
     pass
 
 class ScopeManager(Scope):
@@ -28,7 +27,7 @@ class ScopeManager(Scope):
   def scopes(self) -> list[str]:
     return list(self._sources.keys())
 
-  def scope_path(self, scope: str) -> Optional[str]:
+  def scope_path(self, scope: str) -> str | None:
     scope_path = self._sources.get(scope, None)
     if scope_path is None:
       scope_path = self._removed_sources.get(scope, None)

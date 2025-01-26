@@ -3,9 +3,7 @@ from __future__ import annotations
 import os
 import io
 
-from typing import Optional
 from sqlite3 import Cursor
-from sqlite3_pool import register_table_creators, SQLite3Pool
 from .fts5_db import FTS5DB
 from .vector_db import VectorDB
 from .index_db import IndexDB
@@ -14,6 +12,7 @@ from ..parser import PdfParser, PdfMetadata, PdfPage
 from ..scanner import Scope, Event, EventKind, EventTarget
 from ..segmentation import Segment, Segmentation
 from ..utils import hash_sha512, ensure_parent_dir, is_empty_string, assert_continue, InterruptException
+from ..sqlite3_pool import register_table_creators, SQLite3Pool
 from ..progress_events import (
   FileFormat,
   PDFFileProgressEvent,
@@ -81,7 +80,7 @@ class Index:
             ))
       return pages
 
-  def _get_abs_path(self, scope: str, path: str) -> Optional[str]:
+  def _get_abs_path(self, scope: str, path: str) -> str | None:
     scope_path = self._scope.scope_path(scope)
     if scope_path is None:
       return None
@@ -122,7 +121,7 @@ class Index:
     elif event.kind == EventKind.Removed:
       operation = HandleFileOperation.Remove
     else:
-      raise Exception(f"Unknown event kind: {event.kind}")
+      raise ValueError(f"Unknown event kind: {event.kind}")
 
     listener(StartHandleFileEvent(
       path=path,
@@ -157,7 +156,7 @@ class Index:
         conn.rollback()
         raise e
 
-  def _filter_and_get_abspath(self, event: Event) -> Optional[str]:
+  def _filter_and_get_abspath(self, event: Event) -> str | None:
     if event.target == EventTarget.Directory:
       return
 
@@ -174,11 +173,11 @@ class Index:
 
     return path
 
-  def _update_file_with_event(self, cursor: Cursor, path: str, event: Event) -> tuple[Optional[str], Optional[tuple[int, str]]]:
+  def _update_file_with_event(self, cursor: Cursor, path: str, event: Event) -> tuple[str | None, tuple[int, str] | None]:
     cursor.execute("SELECT id, hash FROM files WHERE scope = ? AND path = ?", (event.scope, event.path,))
     row = cursor.fetchone()
-    new_hash: Optional[str] = None
-    origin_id_hash: Optional[tuple[int, str]] = None
+    new_hash: str | None = None
+    origin_id_hash: tuple[int, str] | None = None
     did_update = False
 
     if row is not None:
@@ -305,7 +304,7 @@ class _IndexContext:
     self._index_db: IndexDB = index_db
     self._added_ids: list[str] = []
 
-  def save(self, id: str, type: str, text: str, properties: Optional[dict] = None):
+  def save(self, id: str, type: str, text: str, properties: dict | None = None):
     segments: list[Segment] = []
     for segment in self._segmentation.split(text):
       if is_empty_string(segment.text):

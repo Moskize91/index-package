@@ -1,15 +1,17 @@
 {
-  "[python]": {
-    "editor.tabSize": 2,
-    "editor.insertSpaces": true
-  },
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
+  "files.trimTrailingWhitespace": true,
   "cSpell.words": [
+    "annots",
+    "ndarray",
     "chromadb",
     "langid",
+    "metadatas",
     "pdfplumber",
+    "pdfs",
     "pikepdf",
+    "pylint",
     "spacy",
     "venv"
   ]

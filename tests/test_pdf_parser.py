@@ -9,17 +9,16 @@ class TestPdfParser(unittest.TestCase):
 
   def test_struct_and_destruct_pdf(self):
     assets_path = os.path.abspath(os.path.join(__file__, "../assets"))
+    added_page_hashes: list[str] = []
+    removed_page_hashes: list[str] = []
     parser = PdfParser(
       cache_dir_path=get_temp_path("pdf_struct/cache"),
       temp_dir_path=get_temp_path("pdf_struct/temp"),
       listeners=PdfParserListeners(
-        on_page_added=lambda path:added_page_hashes.append(path),
-        on_page_removed=lambda path:removed_page_hashes.append(path),
+        on_page_added=added_page_hashes.append,
+        on_page_removed=removed_page_hashes.append,
       ),
     )
-    added_page_hashes: list[str] = []
-    removed_page_hashes: list[str] = []
-
     common_page_hash = "l02eglkFC4Yg2S7Gt44MuGne1PxnBgZ3lBgLvZ24GI0fwF-B70Sf4DjCxe_uU4KsZpyzKNasFLuxe_MUiSZXWQ=="
     file1, file1_hash = self._assets_info(assets_path, "The Sublime Object of Ideology.pdf")
     file2, file2_hash = self._assets_info(assets_path, "铁证待判.pdf")
@@ -43,8 +42,8 @@ class TestPdfParser(unittest.TestCase):
       "0INJs_zOQY96Qrn0JcKaGOiO5CF_SrclB54WKa4HJF171EPvubUAkcr2B8UJuKcTUfulA1gdDlnq4MCkf9fV_A==",
     ])
 
-    added_page_hashes = []
-    removed_page_hashes = []
+    added_page_hashes.clear()
+    removed_page_hashes.clear()
     pdf2 = parser.pdf(file2_hash, file2, lambda _: None)
 
     self.assertListEqual(removed_page_hashes, [])
@@ -69,10 +68,10 @@ class TestPdfParser(unittest.TestCase):
 
     self.assertListEqual(
       hash_of_pdf,
-      self._read_hash_of_files(parser._pages_path),
+      self._read_hash_of_files(parser.pages_path),
     )
-    added_page_hashes = []
-    removed_page_hashes = []
+    added_page_hashes.clear()
+    removed_page_hashes.clear()
     parser.fire_file_removed(file2_hash)
 
     self.assertListEqual(added_page_hashes, [])
@@ -89,10 +88,10 @@ class TestPdfParser(unittest.TestCase):
     hash_of_pdf.sort()
     self.assertListEqual(
       hash_of_pdf,
-      self._read_hash_of_files(parser._pages_path),
+      self._read_hash_of_files(parser.pages_path),
     )
-    added_page_hashes = []
-    removed_page_hashes = []
+    added_page_hashes.clear()
+    removed_page_hashes.clear()
     parser.fire_file_removed(file1_hash)
 
     self.assertListEqual(added_page_hashes, [])
@@ -107,24 +106,24 @@ class TestPdfParser(unittest.TestCase):
     self.assertFalse(parser.pdf_has_cached(file1_hash))
     self.assertListEqual(
       [],
-      self._read_hash_of_files(parser._pages_path),
+      self._read_hash_of_files(parser.pages_path),
     )
 
   def test_extract_annotation(self):
     assets_path = os.path.abspath(os.path.join(__file__, "../assets"))
+    added_page_hashes: list[str] = []
+    removed_page_hashes: list[str] = []
     parser = PdfParser(
       cache_dir_path=get_temp_path("pdf_extract/cache"),
       temp_dir_path=get_temp_path("pdf_extract/temp"),
       listeners=PdfParserListeners(
-        on_page_added=lambda path:added_page_hashes.append(path),
-        on_page_removed=lambda path:removed_page_hashes.append(path),
+        on_page_added=added_page_hashes.append,
+        on_page_removed=removed_page_hashes.append,
       ),
     )
-    added_page_hashes: list[str] = []
-    removed_page_hashes: list[str] = []
 
     file, file_hash = self._assets_info(assets_path, "纯粹理性批判.pdf")
-    pdf = parser.pdf(file_hash, file, lambda _: None)
+    parser.pdf(file_hash, file, lambda _: None)
 
     self.assertListEqual(removed_page_hashes, [])
     self.assertListEqual(added_page_hashes, [

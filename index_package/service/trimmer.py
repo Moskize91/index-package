@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Union, Optional
+from typing import Union
 
 from ..parser import PdfParser, PdfMetadata
 from ..index import Index, IndexNode, IndexSegment, IndexNodeMatching
@@ -70,10 +70,10 @@ def _trim_page_and_child_type(
   node: IndexNode,
   index: Index,
   pdf_parser: PdfParser,
-  page_items_dict: dict[str, PageQueryItem]) -> Optional[PageQueryItem]:
+  page_items_dict: dict[str, PageQueryItem]) -> PageQueryItem | None:
 
   page = pdf_parser.page(node.id)
-  page_item: Optional[PageQueryItem] = None
+  page_item: PageQueryItem | None = None
 
   if page is None:
     return page_item

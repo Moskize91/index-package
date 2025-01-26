@@ -1,7 +1,7 @@
 from __future__ import annotations
 from enum import Enum
-from typing import cast, Optional, TypeVar, Generic, Callable
-from sqlite3_pool import build_thread_pool, release_thread_pool
+from typing import cast, TypeVar, Generic, Callable
+from ..sqlite3_pool import build_thread_pool, release_thread_pool
 
 import traceback
 import threading
@@ -12,7 +12,7 @@ _interrupted_event_val = threading.local()
 
 class _SemaphoreValue(Generic[E]):
   def __init__(self):
-    self._element: Optional[E] = None
+    self._element: E | None = None
     self._did_release = False
     self._did_release_lock = threading.Lock()
     self._putter_lock = threading.Lock()
@@ -31,7 +31,7 @@ class _SemaphoreValue(Generic[E]):
       ack_success = self._ack_queue.get()
     return ack_success
 
-  def get(self) -> Optional[E]:
+  def get(self) -> E | None:
     with self._getter_lock:
       with self._did_release_lock:
         if self._did_release:
@@ -60,14 +60,14 @@ class TasksPool(Generic[E]):
     self,
     max_workers: int,
     on_handle: Callable[[E, int], None],
-    on_init: Optional[Callable[[int], None]] = None,
+    on_init: Callable[[int], None] | None = None,
     print_error: bool = True,
   ):
     self._state: TasksPoolResultState = TasksPoolResultState.Success
     self._state_lock: threading.Lock = threading.Lock()
     self._max_workers = max_workers
     self._on_handle: Callable[[E, int], None] = on_handle
-    self._on_init: Optional[Callable[[int], None]] = on_init
+    self._on_init: Callable[[int], None] | None = on_init
     self._print_error: bool = print_error
     self._semaphore_value: _SemaphoreValue[E] = _SemaphoreValue()
     self._threads: list[threading.Thread] = []
@@ -80,11 +80,7 @@ class TasksPool(Generic[E]):
 
   def start(self) -> TasksPool:
     for index in range(self._max_workers):
-      thread = threading.Thread(
-        target=lambda:self._start_thread_loop(index),
-        daemon=True,
-      )
-      self._threads.append(thread)
+      self._threads.append(self._create_thread(index))
     for thread in self._threads:
       thread.start()
     return self
@@ -111,6 +107,12 @@ class TasksPool(Generic[E]):
     for thread in self._threads:
       thread.join()
     return self._state
+
+  def _create_thread(self, index: int):
+    return threading.Thread(
+      target=lambda:self._start_thread_loop(index),
+      daemon=True,
+    )
 
   # this function is running in daemon thread
   def _start_thread_loop(self, index: int):

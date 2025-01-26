@@ -1,6 +1,5 @@
 import os
 
-from typing import Optional
 from dataclasses import dataclass
 from .scan_job import ServiceScanJob
 from .trimmer import trim_nodes, QueryItem
@@ -67,7 +66,7 @@ class Service:
       return ""
     return pdf.pages[page_index].snapshot
 
-  def device_path(self, scope: str, path: str) -> Optional[str]:
+  def device_path(self, scope: str, path: str) -> str | None:
     scope_path = self._scanner.scope.scope_path(scope)
     if scope_path is None:
       return None
@@ -76,7 +75,7 @@ class Service:
     path = os.path.abspath(path)
     return path
 
-  def scan_job(self, max_workers: int = 1, progress_event_listener: Optional[ProgressEventListener] = None) -> ServiceScanJob:
+  def scan_job(self, max_workers: int = 1, progress_event_listener: ProgressEventListener | None = None) -> ServiceScanJob:
     if progress_event_listener is None:
       progress_event_listener = lambda _: None
 

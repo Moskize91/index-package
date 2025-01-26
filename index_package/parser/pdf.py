@@ -5,14 +5,14 @@ import json
 import shutil
 import pikepdf
 
-from typing import cast, Optional, Callable
+from typing import cast, Callable
 from sqlite3 import Cursor, Connection
-from sqlite3_pool import register_table_creators, SQLite3Pool
 from dataclasses import dataclass
 
 from .pdf_extractor import extract_metadata_with_pdf, PdfExtractor, Annotation
 from ..progress_events import PDFFileProgressEvent, PDFFileStep, ProgressEventListener
 from ..utils import hash_sha512, assert_continue, TempFolderHub, InterruptException
+from ..sqlite3_pool import register_table_creators, SQLite3Pool
 
 @dataclass
 class Pdf:
@@ -22,39 +22,44 @@ class Pdf:
 
 @dataclass
 class PdfMetadata:
-  author: Optional[str]
-  modified_at: Optional[str]
-  producer: Optional[str]
+  author: str | None
+  modified_at: str | None
+  producer: str | None
 
 class PdfPage:
-  def __init__(self, parent, pdf_id: int, index: int, hash: str):
+  def __init__(
+      self,
+      pdf_id: int,
+      index: int,
+      hash: str,
+      pages_path: str,
+      extractor: PdfExtractor,
+    ):
     self.index: int = index
     self.hash: str = hash
-    self._parent = parent
-    self._pdf_id = pdf_id
-    self._annotations: Optional[list[Annotation]] = None
-    self._snapshot: Optional[str] = None
+    self._pdf_id: int = pdf_id
+    self._pages_path: str = pages_path
+    self._extractor: PdfExtractor = extractor
+    self._annotations: list[Annotation] | None = None
+    self._snapshot: str | None = None
 
   @property
   def page_file_path(self) -> str:
-    return os.path.join(self._parent._pages_path, f"{self.hash}.pdf")
+    return os.path.join(self._pages_path, f"{self.hash}.pdf")
 
   @property
   def annotations(self) -> list[Annotation]:
     if self._annotations is None:
-      extractor = cast(PdfExtractor, self._parent._extractor)
+      extractor = cast(PdfExtractor, self._extractor)
       self._annotations = extractor.read_annotations(self.hash)
     return self._annotations
 
   @property
   def snapshot(self) -> str:
     if self._snapshot is None:
-      extractor = cast(PdfExtractor, self._parent._extractor)
+      extractor = cast(PdfExtractor, self._extractor)
       self._snapshot = extractor.read_snapshot(self.hash)
     return self._snapshot
-
-  def load_pdf(self) -> Pdf:
-    return cast(Pdf, self._parent._load_cached_pdf(self._pdf_id))
 
 # it's just for test unit now.
 @dataclass
@@ -90,13 +95,23 @@ class PdfParser:
   def name(self) -> str:
     return "pdf"
 
-  def page(self, page_hash: str) -> Optional[PdfPage]:
+  @property
+  def pages_path(self) -> str:
+    return self._pages_path
+
+  def page(self, page_hash: str) -> PdfPage | None:
     with self._db.connect() as (cursor, _):
       cursor.execute("SELECT pdf_id, idx FROM pages WHERE hash = ? LIMIT 1", (page_hash,))
       row = cursor.fetchone()
       if row is not None:
         pdf_id, index = row
-        return PdfPage(self, pdf_id, index, page_hash)
+        return PdfPage(
+          pdf_id=pdf_id,
+          index=index,
+          hash=page_hash,
+          pages_path=self._pages_path,
+          extractor=self._extractor,
+        )
       else:
         return None
 
@@ -119,8 +134,8 @@ class PdfParser:
         pages=self._all_pages(cursor, pdf_id),
       )
 
-  def pdf_or_none(self, hash: str) -> Optional[Pdf]:
-   with self._db.connect() as (cursor, _):
+  def pdf_or_none(self, hash: str) -> Pdf | None:
+    with self._db.connect() as (cursor, _):
       pdf_id = self._pdf_id(cursor, hash)
       if pdf_id is None:
         return None
@@ -152,7 +167,13 @@ class PdfParser:
     )
     for row in rows.fetchall():
       index, page_hash = row
-      pdf_page = PdfPage(self, pdf_id, index, page_hash)
+      pdf_page = PdfPage(
+        pdf_id= pdf_id,
+        index=index,
+        hash=page_hash,
+        pages_path=self._pages_path,
+        extractor=self._extractor,
+      )
       pdf_pages.append(pdf_page)
 
     return pdf_pages
@@ -275,7 +296,7 @@ class PdfParser:
 
     return page_hashes
 
-  def _pdf_id(self, cursor: Cursor, hash: str) -> Optional[int]:
+  def _pdf_id(self, cursor: Cursor, hash: str) -> int | None:
     cursor.execute("SELECT id FROM pdfs WHERE hash = ? LIMIT 1", (hash,))
     row = cursor.fetchone()
     if row is None:

@@ -21,7 +21,7 @@ class ServiceScanJob:
     self._pool: TasksPool[int] = TasksPool[int](
       max_workers=max_workers,
       print_error=True,
-      on_handle=lambda id, i: self._on_handle_task(id, i),
+      on_handle=self._on_handle_task,
     )
 
   # @return True if scan completed, False if scan interrupted
