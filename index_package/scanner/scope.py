@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from sqlite3 import Cursor
-from sqlite3_pool import SQLite3Pool
 
+from ..sqlite3_pool import SQLite3Pool
 from .event_parser import EventTarget
 from .events import record_removed_event
 

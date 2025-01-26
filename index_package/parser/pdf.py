@@ -7,12 +7,12 @@ import pikepdf
 
 from typing import cast, Callable
 from sqlite3 import Cursor, Connection
-from sqlite3_pool import register_table_creators, SQLite3Pool
 from dataclasses import dataclass
 
 from .pdf_extractor import extract_metadata_with_pdf, PdfExtractor, Annotation
 from ..progress_events import PDFFileProgressEvent, PDFFileStep, ProgressEventListener
 from ..utils import hash_sha512, assert_continue, TempFolderHub, InterruptException
+from ..sqlite3_pool import register_table_creators, SQLite3Pool
 
 @dataclass
 class Pdf:

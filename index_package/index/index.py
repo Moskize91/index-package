@@ -4,7 +4,6 @@ import os
 import io
 
 from sqlite3 import Cursor
-from sqlite3_pool import register_table_creators, SQLite3Pool
 from .fts5_db import FTS5DB
 from .vector_db import VectorDB
 from .index_db import IndexDB
@@ -13,6 +12,7 @@ from ..parser import PdfParser, PdfMetadata, PdfPage
 from ..scanner import Scope, Event, EventKind, EventTarget
 from ..segmentation import Segment, Segmentation
 from ..utils import hash_sha512, ensure_parent_dir, is_empty_string, assert_continue, InterruptException
+from ..sqlite3_pool import register_table_creators, SQLite3Pool
 from ..progress_events import (
   FileFormat,
   PDFFileProgressEvent,

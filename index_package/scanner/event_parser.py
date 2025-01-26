@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from sqlite3_pool import SQLite3Pool
+from ..sqlite3_pool import SQLite3Pool
 from .events import EventKind, EventTarget
 
 @dataclass

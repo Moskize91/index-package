@@ -1,7 +1,7 @@
 from __future__ import annotations
 from enum import Enum
 from typing import cast, TypeVar, Generic, Callable
-from sqlite3_pool import build_thread_pool, release_thread_pool
+from ..sqlite3_pool import build_thread_pool, release_thread_pool
 
 import traceback
 import threading

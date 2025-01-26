@@ -4,11 +4,11 @@ import sqlite3
 from dataclasses import dataclass
 from typing import cast
 from sqlite3 import Cursor
-from sqlite3_pool import register_table_creators, SQLite3Pool
+from ..utils import assert_continue
+from ..sqlite3_pool import register_table_creators, SQLite3Pool
 from .scope import Scope, ScopeManager
 from .events import scan_events, record_added_event, record_updated_event, record_removed_event
 from .event_parser import Event, EventTarget, EventParser
-from ..utils import assert_continue
 
 @dataclass
 class _File:
