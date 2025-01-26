@@ -1,7 +1,6 @@
 import os
 import unittest
 
-from typing import Optional
 from index_package.utils.chunk import Chunk, ChunkHub
 from tests.utils import get_temp_path
 
@@ -60,7 +59,7 @@ class TestChunk(unittest.TestCase):
     for chunk in [foo_chunk, child1, child2, child3, sub_child]:
       self.assertIsNone(chunks.get(chunk.uid))
 
-  def _assert_chunks_equals(self, c1: Optional[Chunk], c2: Optional[Chunk]):
+  def _assert_chunks_equals(self, c1: Chunk | None, c2: Chunk | None):
     if c1 is None:
       self.assertIsNone(c2)
     elif c2 is None:

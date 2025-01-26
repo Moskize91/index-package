@@ -2,7 +2,7 @@ import os
 import sqlite3
 
 from dataclasses import dataclass
-from typing import cast, Optional
+from typing import cast
 from sqlite3 import Cursor
 from sqlite3_pool import register_table_creators, SQLite3Pool
 from .scope import Scope, ScopeManager
@@ -15,7 +15,7 @@ class _File:
   scope: str
   path: str
   mtime: float
-  children: Optional[list[str]]
+  children: list[str] | None
 
   @property
   def is_dir(self) -> bool:
@@ -89,13 +89,13 @@ class Scanner:
     cursor: sqlite3.Cursor,
     scope: str,
     relative_path: str
-  ) -> Optional[list[str]]:
+  ) -> list[str] | None:
 
     scan_path = cast(str, self._scope_manager.scope_path(scope))
     abs_path = os.path.join(scan_path, f".{relative_path}")
     abs_path = os.path.abspath(abs_path)
     old_file = self._select_file(cursor, scope, relative_path)
-    new_file: Optional[_File] = None
+    new_file: _File | None = None
     file_never_change = False
 
     if os.path.exists(abs_path):
@@ -104,7 +104,7 @@ class Scanner:
         return None
 
       mtime = os.path.getmtime(abs_path)
-      children: Optional[list[str]] = None
+      children: list[str] | None = None
 
       if old_file is not None and \
          old_file.mtime == mtime and \
@@ -147,8 +147,8 @@ class Scanner:
     self,
     cursor: sqlite3.Cursor,
     scope: str,
-    old_file: Optional[_File],
-    new_file: Optional[_File]
+    old_file: _File | None,
+    new_file: _File | None
   ):
     if new_file is not None:
       new_path = new_file.path
@@ -191,8 +191,8 @@ class Scanner:
     self,
     cursor: sqlite3.Cursor,
     scope: str,
-    old_file: Optional[_File],
-    new_file: Optional[_File]):
+    old_file: _File | None,
+    new_file: _File | None):
 
     if old_file is None or not old_file.is_dir:
       return
@@ -217,8 +217,8 @@ class Scanner:
       cursor.execute("DELETE FROM files WHERE scope = ? AND path = ?", (scope, child_file.path))
       record_removed_event(cursor, child_file.event_target, child_path, scope, child_file.mtime)
 
-  def _file_inserted_children_and_target(self, file: _File) -> tuple[Optional[str], EventTarget]:
-    children: Optional[str] = None
+  def _file_inserted_children_and_target(self, file: _File) -> tuple[str | None, EventTarget]:
+    children: str | None = None
     target: EventTarget = EventTarget.File
 
     if file.children is not None:
@@ -243,13 +243,13 @@ class Scanner:
       cursor.execute("DELETE FROM files WHERE id = ?", (file.path,))
       record_removed_event(cursor, file.event_target, file.path, file.scope, file.mtime)
 
-  def _select_file(self, cursor: sqlite3.Cursor, scope: str, relative_path: str) -> Optional[_File]:
+  def _select_file(self, cursor: sqlite3.Cursor, scope: str, relative_path: str) -> _File | None:
     cursor.execute("SELECT mtime, children FROM files WHERE scope = ? AND path = ?", (scope, relative_path,))
     row = cursor.fetchone()
     if row is None:
       return None
     mtime, children_str = row
-    children: Optional[list[str]] = None
+    children: list[str] | None = None
 
     if children_str is not None:
       # "/" is disabled in unix & windows file system, so it's safe to use it as separator

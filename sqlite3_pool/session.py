@@ -2,7 +2,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 
-from typing import Callable, Optional
+from typing import Callable
 
 
 _THREAD_POOL = threading.local()
@@ -17,7 +17,7 @@ def release_thread_pool():
     # pylint: disable=E1101
     getattr(_THREAD_POOL, "value").release()
 
-def get_thread_pool() -> Optional[ThreadPool]:
+def get_thread_pool() -> ThreadPool | None:
   if hasattr(_THREAD_POOL, "value"):
     return getattr(_THREAD_POOL, "value")
   return None
@@ -57,7 +57,7 @@ class ThreadPool():
   def __init__(self):
     self._stacks: dict[str, list[sqlite3.Connection]] = {}
 
-  def get(self, format_name: str) -> Optional[sqlite3.Connection]:
+  def get(self, format_name: str) -> sqlite3.Connection | None:
     stack = self._stack(format_name)
     if len(stack) == 0:
       return None

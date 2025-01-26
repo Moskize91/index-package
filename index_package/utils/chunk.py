@@ -4,13 +4,13 @@ import uuid
 import sqlite3
 
 from dataclasses import dataclass
-from typing import Any, Union, Optional
+from typing import Union
 
 @dataclass
 class Chunk:
   uid: str
   path: str
-  meta: Optional[Any]
+  meta: any
   parent_uid: str
 
 @dataclass
@@ -48,7 +48,7 @@ class ChunkHub:
 
     return conn
 
-  def get(self, uid: str) -> Optional[Chunk]:
+  def get(self, uid: str) -> Chunk | None:
     self._cursor.execute(
       "SELECT parent_uid, path, meta FROM chunks WHERE uid = ?",
       (uid,),
@@ -59,7 +59,7 @@ class ChunkHub:
       return None
 
     parent_uid, path, meta_str = row
-    meta: Optional[Any] = None
+    meta: any = None
 
     if meta_str is not None:
       meta = json.loads(meta_str)
@@ -71,12 +71,12 @@ class ChunkHub:
       path=empty_str(path),
     )
 
-  def get_parent(self, chunk: Chunk) -> Optional[Chunk]:
+  def get_parent(self, chunk: Chunk) -> Chunk | None:
     if chunk.parent_uid == "":
       return None
     return self.get(chunk.parent_uid)
 
-  def get_child(self, parent: Chunk, path: str) -> Optional[Chunk]:
+  def get_child(self, parent: Chunk, path: str) -> Chunk | None:
     self._cursor.execute(
       "SELECT uid, meta FROM chunks WHERE parent_uid = ? AND path = ?",
       (parent.uid, path),
@@ -87,7 +87,7 @@ class ChunkHub:
       return None
 
     uid, meta_str = row
-    meta: Optional[Any] = None
+    meta: Chunk | None = None
     if meta_str is not None:
       meta = json.loads(meta_str)
     return Chunk(
@@ -114,27 +114,27 @@ class ChunkHub:
       ))
     return refs
 
-  def add(self, meta: Optional[Any] = None) -> Chunk:
+  def add(self, meta: Chunk | None = None) -> Chunk:
     return self._create(meta=meta)
 
   def add_child(
       self, parent: Chunk, path: str,
-      meta: Optional[Any] = None) -> Chunk:
+      meta: Chunk | None = None) -> Chunk:
     return self._create(parent=parent, path=path, meta=meta)
 
   def _create(
       self,
-      parent: Optional[Chunk] = None,
-      path: Optional[str] = None,
-      meta: Optional[Any] = None,
+      parent: Chunk | None = None,
+      path: str | None = None,
+      meta: any = None,
   ) -> Chunk:
     uid = str(uuid.uuid4()).replace("-", "")
-    parent_uid: Optional[str] = None
+    parent_uid: str | None = None
 
     if parent is not None:
       parent_uid = parent.uid
 
-    meta_str: Optional[str] = None
+    meta_str: str | None = None
     if meta is not None:
       meta_str = json.dumps(meta)
 
@@ -153,8 +153,8 @@ class ChunkHub:
     self._conn.commit()
     return chunk
 
-  def set_meta(self, chunk: Union[str, Chunk], meta: Optional[Any]):
-    meta_str: Optional[str] = None
+  def set_meta(self, chunk: Union[str, Chunk], meta: any):
+    meta_str: str | None = None
     chunk_uid: str = chunk if isinstance(chunk, str) else chunk.uid
 
     if meta is not None:
@@ -198,7 +198,7 @@ class ChunkHub:
     self._cursor.close()
     self._conn.close()
 
-def empty_str(s: Optional[str]) -> str:
+def empty_str(s: str | None) -> str:
   if s is None:
     return ""
   else:

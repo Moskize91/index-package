@@ -4,7 +4,7 @@ import os
 import sqlite3
 
 from threading import Lock
-from typing import Optional, Callable
+from typing import Callable
 
 _FORMATS_LOCK: Lock = Lock()
 _FORMATS: dict[str, _SQLite3Format] = {}
@@ -14,7 +14,7 @@ def register_table_creators(format_name: str, create_table: Callable[[sqlite3.Cu
 
 def get_format(format_name: str) -> _SQLite3Format:
   with _FORMATS_LOCK:
-    pool: Optional[_SQLite3Format] = _FORMATS.get(format_name, None)
+    pool: _SQLite3Format | None = _FORMATS.get(format_name, None)
     if pool is None:
       pool = _SQLite3Format()
       _FORMATS[format_name] = pool

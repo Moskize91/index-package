@@ -4,8 +4,10 @@
   "files.trimTrailingWhitespace": true,
   "cSpell.words": [
     "annots",
+    "ndarray",
     "chromadb",
     "langid",
+    "metadatas",
     "pdfplumber",
     "pdfs",
     "pikepdf",

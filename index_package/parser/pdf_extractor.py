@@ -4,7 +4,6 @@ import re
 import pdfplumber
 import json
 
-from typing import Optional
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from pdfplumber.page import Page
@@ -17,14 +16,14 @@ _ANNOTATION_EXT = "annotation.json"
 
 @dataclass
 class Annotation:
-  type: Optional[str]
-  title: Optional[str]
-  content: Optional[str]
-  uri: Optional[str]
-  created_at: Optional[str]
-  updated_at: Optional[str]
-  quad_points: Optional[list[float]]
-  extracted_text: Optional[str]
+  type: str | None
+  title: str | None
+  content: str | None
+  uri: str | None
+  created_at: str | None
+  updated_at: str | None
+  quad_points: list[float] | None
+  extracted_text: str | None
 
 def extract_metadata_with_pdf(pdf_path: str) -> dict:
   with pdfplumber.open(pdf_path) as pdf_file:
@@ -156,7 +155,7 @@ class PdfExtractor:
         annotations.append(annotation)
     return annotations
 
-  def _extract_selected_text(self, page: Page, quad_points: list[float]) -> Optional[str]:
+  def _extract_selected_text(self, page: Page, quad_points: list[float]) -> str | None:
     annotation_polygon = _AnnotationPolygon(quad_points)
     if not annotation_polygon.is_valid:
       return None

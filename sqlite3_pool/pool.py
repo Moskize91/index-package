@@ -2,7 +2,6 @@ from __future__ import annotations
 import sqlite3
 import threading
 
-from typing import Optional
 from .format import get_format
 from .session import get_thread_pool, SQLite3ConnectionSession
 
@@ -23,7 +22,7 @@ class SQLite3Pool:
 
   def connect(self) -> SQLite3ConnectionSession:
     pool = get_thread_pool()
-    conn: Optional[sqlite3.Connection] = None
+    conn: sqlite3.Connection | None = None
 
     if pool is not None:
       # pylint: disable=E1101
