@@ -4,15 +4,18 @@
   "files.trimTrailingWhitespace": true,
   "cSpell.words": [
     "annots",
-    "ndarray",
     "chromadb",
     "langid",
     "metadatas",
+    "natsort",
+    "natsorted",
+    "ndarray",
     "pdfplumber",
     "pdfs",
     "pikepdf",
     "pylint",
     "spacy",
+    "updation",
     "venv"
   ]
 }

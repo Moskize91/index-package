@@ -258,7 +258,7 @@ class Scanner:
     return _File(scope, relative_path, mtime, children)
 
 def _create_tables(cursor: Cursor):
-  cursor.execute('''
+  cursor.execute("""
     CREATE TABLE files (
       id INTEGER PRIMARY KEY,
       scope TEXT NOT NULL,
@@ -266,8 +266,8 @@ def _create_tables(cursor: Cursor):
       mtime REAL NOT NULL,
       children TEXT
     )
-  ''')
-  cursor.execute('''
+  """)
+  cursor.execute("""
     CREATE TABLE events (
       id INTEGER PRIMARY KEY,
       kind INTEGER NOT NULL,
@@ -276,13 +276,13 @@ def _create_tables(cursor: Cursor):
       scope TEXT NOT NULL,
       mtime REAL NOT NULL
     )
-  ''')
-  cursor.execute('''
+  """)
+  cursor.execute("""
     CREATE TABLE scopes (
       name TEXT PRIMARY KEY,
       path TEXT NOT NULL
     )
-  ''')
+  """)
   cursor.execute("""
     CREATE UNIQUE INDEX idx_files ON events (scope, path)
   """)
