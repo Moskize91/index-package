@@ -1,5 +1,7 @@
 # parpers-rag
 
+已迁移到 [knowledge-base](https://github.com/oomol-lab/knowledge-base)……
+
 # 安装
 
 ## conda 环境
